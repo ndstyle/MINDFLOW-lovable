@@ -1,8 +1,96 @@
 import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
-import { FileText, Clock, Search } from "lucide-react";
+import { Search, Filter, Clock, Trash2 } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+
+interface MindMap {
+  id: string;
+  title: string;
+  category: string;
+  created_at: string;
+  xp_earned: number;
+  content: any;
+}
 
 const History = () => {
+  const { user, loading } = useAuth();
+  const navigate = useNavigate();
+  const [mindmaps, setMindmaps] = useState<MindMap[]>([]);
+  const [loadingMindmaps, setLoadingMindmaps] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("all");
+
+  useEffect(() => {
+    if (!loading && !user) {
+      navigate("/auth");
+      return;
+    }
+    
+    if (user) {
+      fetchMindmaps();
+    }
+  }, [user, loading, navigate]);
+
+  const fetchMindmaps = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('mindmaps')
+        .select('id, title, category, created_at, xp_earned, content')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setMindmaps(data || []);
+    } catch (error) {
+      console.error('Error fetching mindmaps:', error);
+      toast.error("failed to load mind maps");
+    } finally {
+      setLoadingMindmaps(false);
+    }
+  };
+
+  const deleteMindMap = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('mindmaps')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      
+      setMindmaps(prev => prev.filter(m => m.id !== id));
+      toast.success("mind map deleted");
+    } catch (error) {
+      console.error('Error deleting mindmap:', error);
+      toast.error("failed to delete mind map");
+    }
+  };
+
+  const filteredMindmaps = mindmaps.filter(mindmap => {
+    const matchesSearch = mindmap.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         mindmap.category.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCategory = selectedCategory === "all" || mindmap.category === selectedCategory;
+    return matchesSearch && matchesCategory;
+  });
+
+  const categories = ["all", ...Array.from(new Set(mindmaps.map(m => m.category)))];
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <main className="container mx-auto px-6 py-8">
+          <div className="text-center">loading...</div>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -18,52 +106,98 @@ const History = () => {
             </p>
           </div>
 
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Button variant="outline" size="sm" className="lowercase">
-                <Search className="w-4 h-4 mr-2" />
-                search maps
-              </Button>
-              <Button variant="outline" size="sm" className="lowercase">
-                filter by date
+          <div className="flex flex-col md:flex-row items-center gap-4 mb-8">
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+              <Input
+                type="text"
+                placeholder="search your mind maps..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 lowercase placeholder:lowercase"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Filter className="w-4 h-4" />
+              <select
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                className="px-3 py-2 border border-border rounded-lg bg-background text-foreground lowercase"
+              >
+                {categories.map(category => (
+                  <option key={category} value={category} className="lowercase">
+                    {category}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {loadingMindmaps ? (
+            <div className="text-center text-muted-foreground lowercase">loading mind maps...</div>
+          ) : filteredMindmaps.length === 0 ? (
+            <div className="text-center space-y-4">
+              <p className="text-muted-foreground lowercase">
+                {searchTerm || selectedCategory !== "all" ? "no mind maps match your search" : "no mind maps yet"}
+              </p>
+              <Button onClick={() => navigate("/")} className="lowercase">
+                create your first mind map
               </Button>
             </div>
-            <Button className="lowercase">
-              export all
-            </Button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div key={i} className="p-6 bg-card rounded-lg border border-border/50 space-y-4">
-                <div className="flex items-center justify-between">
-                  <FileText className="w-8 h-8 text-primary" />
-                  <span className="text-xs text-muted-foreground">2 days ago</span>
-                </div>
-                <h3 className="font-semibold text-foreground lowercase">
-                  project planning mind map {i}
-                </h3>
-                <p className="text-sm text-muted-foreground lowercase">
-                  a comprehensive mind map for organizing project tasks and deliverables
-                </p>
-                <div className="flex items-center gap-2">
-                  <Button size="sm" variant="outline" className="flex-1 lowercase">
-                    view
-                  </Button>
-                  <Button size="sm" variant="outline" className="flex-1 lowercase">
-                    edit
-                  </Button>
-                </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredMindmaps.map((mindmap) => (
+                  <Card key={mindmap.id} className="hover:shadow-md transition-shadow">
+                    <CardHeader>
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <CardTitle className="text-sm font-medium text-foreground lowercase line-clamp-2">
+                            {mindmap.title}
+                          </CardTitle>
+                          <CardDescription className="text-xs text-muted-foreground lowercase">
+                            {mindmap.category}
+                          </CardDescription>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => deleteMindMap(mindmap.id)}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <div className="flex items-center gap-2">
+                          <Clock className="w-4 h-4" />
+                          <span className="lowercase">
+                            {new Date(mindmap.created_at).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <span className="lowercase">
+                          +{mindmap.xp_earned} xp
+                        </span>
+                      </div>
+                      <div className="mt-2 text-xs text-muted-foreground lowercase">
+                        {mindmap.content?.nodes?.length || 0} nodes
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
-            ))}
-          </div>
-
-          <div className="text-center text-muted-foreground lowercase">
-            <p>showing 6 of 12 mind maps</p>
-            <Button variant="ghost" className="mt-4 lowercase">
-              load more
-            </Button>
-          </div>
+              
+              {filteredMindmaps.length > 0 && (
+                <div className="text-center mt-8">
+                  <Button variant="outline" onClick={fetchMindmaps} className="lowercase">
+                    refresh
+                  </Button>
+                </div>
+              )}
+            </>
+          )}
         </div>
       </main>
     </div>
