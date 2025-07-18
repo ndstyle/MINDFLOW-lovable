@@ -1,26 +1,28 @@
 import { Button } from "@/components/ui/button";
 import { User } from "lucide-react";
+import { Link, useLocation } from "react-router-dom";
 
 export const Header = () => {
+  const location = useLocation();
   return (
     <header className="w-full px-6 py-4 flex items-center justify-between border-b border-border/50">
       <div className="flex items-center gap-8">
-        <div className="text-xl font-medium text-foreground lowercase">
+        <Link to="/" className="text-xl font-medium text-foreground lowercase hover:text-primary transition-colors">
           mindflow
-        </div>
+        </Link>
         <nav className="hidden md:flex items-center gap-6">
-          <a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors lowercase">
+          <Link to="/" className="text-sm text-muted-foreground hover:text-foreground transition-colors lowercase">
             home
-          </a>
-          <a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors lowercase">
+          </Link>
+          <Link to="/create" className="text-sm text-muted-foreground hover:text-foreground transition-colors lowercase">
             create
-          </a>
-          <a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors lowercase">
+          </Link>
+          <Link to="/dashboard" className="text-sm text-muted-foreground hover:text-foreground transition-colors lowercase">
             dashboard
-          </a>
-          <a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors lowercase">
+          </Link>
+          <Link to="/history" className="text-sm text-muted-foreground hover:text-foreground transition-colors lowercase">
             history
-          </a>
+          </Link>
         </nav>
       </div>
       

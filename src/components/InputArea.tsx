@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Mic, Send, Sparkles } from "lucide-react";
+import { Send, Sparkles } from "lucide-react";
 import { toast } from "sonner";
+import { VoiceInput } from "./VoiceInput";
 
 interface InputAreaProps {
   onSubmit: (text: string) => void;
@@ -28,6 +29,10 @@ export const InputArea = ({ onSubmit, isProcessing }: InputAreaProps) => {
     }
   };
 
+  const handleVoiceTranscript = (transcript: string) => {
+    setInputText(prev => prev + (prev ? ' ' : '') + transcript);
+  };
+
   return (
     <div className="w-full max-w-4xl mx-auto space-y-4">
       <div className="gradient-border">
@@ -48,15 +53,10 @@ export const InputArea = ({ onSubmit, isProcessing }: InputAreaProps) => {
         </div>
         
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="lowercase"
+          <VoiceInput
+            onTranscript={handleVoiceTranscript}
             disabled={isProcessing}
-          >
-            <Mic className="w-4 h-4 mr-2" />
-            voice input
-          </Button>
+          />
           
           <Button
             onClick={handleSubmit}
