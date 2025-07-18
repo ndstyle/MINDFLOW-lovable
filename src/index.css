@@ -2,41 +2,51 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+/* mindflow design system - dark theme with vibrant gradients */
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --background: 220 27% 4%;
+    --foreground: 0 0% 98%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card: 220 27% 6%;
+    --card-foreground: 0 0% 98%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover: 220 27% 6%;
+    --popover-foreground: 0 0% 98%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    --primary: 263 70% 50%;
+    --primary-foreground: 0 0% 98%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 220 27% 8%;
+    --secondary-foreground: 0 0% 70%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 220 27% 8%;
+    --muted-foreground: 0 0% 60%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 200 100% 50%;
+    --accent-foreground: 220 27% 4%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --border: 220 27% 12%;
+    --input: 220 27% 12%;
+    --ring: 263 70% 50%;
 
-    --radius: 0.5rem;
+    --radius: 0.75rem;
+
+    /* Custom gradient colors */
+    --gradient-blue: 220 100% 60%;
+    --gradient-purple: 263 70% 50%;
+    --gradient-pink: 320 65% 55%;
+    --gradient-green: 150 60% 50%;
+    --gradient-cyan: 180 100% 50%;
+
+    /* Floating particles */
+    --particle-1: 200 100% 70%;
+    --particle-2: 263 70% 60%;
+    --particle-3: 150 60% 60%;
 
     --sidebar-background: 0 0% 98%;
 
@@ -100,6 +110,110 @@ All colors MUST be HSL.
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+
+  /* Custom gradient classes */
+  .gradient-text {
+    background: linear-gradient(135deg, 
+      hsl(var(--gradient-blue)), 
+      hsl(var(--gradient-purple)), 
+      hsl(var(--gradient-pink)), 
+      hsl(var(--gradient-green))
+    );
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-size: 400% 400%;
+    animation: gradient-shift 8s ease-in-out infinite;
+  }
+
+  .gradient-border {
+    position: relative;
+    background: linear-gradient(135deg, 
+      hsl(var(--gradient-blue)), 
+      hsl(var(--gradient-purple))
+    );
+    border-radius: var(--radius);
+    padding: 1px;
+  }
+
+  .gradient-border > * {
+    background: hsl(var(--background));
+    border-radius: calc(var(--radius) - 1px);
+  }
+
+  /* Floating particles animation */
+  .particle {
+    position: absolute;
+    border-radius: 50%;
+    pointer-events: none;
+    opacity: 0.6;
+    animation: float 20s linear infinite;
+  }
+
+  .particle-1 {
+    background: hsl(var(--particle-1));
+    width: 4px;
+    height: 4px;
+    animation-delay: 0s;
+  }
+
+  .particle-2 {
+    background: hsl(var(--particle-2));
+    width: 6px;
+    height: 6px;
+    animation-delay: -7s;
+  }
+
+  .particle-3 {
+    background: hsl(var(--particle-3));
+    width: 3px;
+    height: 3px;
+    animation-delay: -14s;
+  }
+
+  /* Animations */
+  @keyframes gradient-shift {
+    0%, 100% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
+  }
+
+  @keyframes float {
+    0% {
+      transform: translateY(100vh) rotate(0deg);
+      opacity: 0;
+    }
+    10% {
+      opacity: 0.6;
+    }
+    90% {
+      opacity: 0.6;
+    }
+    100% {
+      transform: translateY(-100px) rotate(360deg);
+      opacity: 0;
+    }
+  }
+
+  /* Mind map specific styles */
+  .mind-map-node {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .mind-map-node:hover {
+    transform: scale(1.05);
+  }
+
+  .mind-map-connection {
+    stroke: hsl(var(--primary));
+    stroke-width: 2;
+    fill: none;
+    opacity: 0.7;
   }
 }

@@ -61,7 +61,17 @@ export default {
 					'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
 					border: 'hsl(var(--sidebar-border))',
 					ring: 'hsl(var(--sidebar-ring))'
+				},
+				gradient: {
+					blue: 'hsl(var(--gradient-blue))',
+					purple: 'hsl(var(--gradient-purple))',
+					pink: 'hsl(var(--gradient-pink))',
+					green: 'hsl(var(--gradient-green))',
+					cyan: 'hsl(var(--gradient-cyan))'
 				}
+			},
+			fontFamily: {
+				sans: ['Inter', 'system-ui', 'sans-serif'],
 			},
 			borderRadius: {
 				lg: 'var(--radius)',
