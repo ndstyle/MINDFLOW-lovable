@@ -52,10 +52,18 @@ serve(async (req) => {
   }
 
   try {
+    console.log('OpenAI API Key present:', !!openAIApiKey);
+    console.log('API Key starts with:', openAIApiKey ? openAIApiKey.substring(0, 10) + '...' : 'undefined');
+    
     const { text, category } = await req.json();
+    console.log('Request received:', { text: text?.substring(0, 50), category });
 
     if (!text) {
       throw new Error('No text provided');
+    }
+
+    if (!openAIApiKey) {
+      throw new Error('OpenAI API key not configured');
     }
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -80,19 +88,29 @@ serve(async (req) => {
       }),
     });
 
+    console.log('OpenAI response status:', response.status);
+    
     if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.statusText}`);
+      const errorText = await response.text();
+      console.error('OpenAI API error:', response.status, errorText);
+      throw new Error(`OpenAI API error: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
+    console.log('OpenAI response received, generating mind map...');
+    
     const content = data.choices[0].message.content;
+    console.log('AI generated content:', content?.substring(0, 100) + '...');
     
     try {
       const mindMapData = JSON.parse(content);
+      console.log('Successfully parsed mind map data, nodes count:', mindMapData.nodes?.length);
       return new Response(JSON.stringify(mindMapData), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     } catch (parseError) {
+      console.error('Failed to parse AI response as JSON:', parseError);
+      console.log('Raw AI response:', content);
       // Fallback if AI doesn't return valid JSON
       const fallbackNodes: MindMapNode[] = [
         {
@@ -127,8 +145,17 @@ serve(async (req) => {
     }
   } catch (error) {
     console.error('Error in generate-mindmap function:', error);
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+    
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        error: error.message,
+        details: 'Check function logs for more information'
+      }),
       {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
