@@ -7,18 +7,23 @@ interface Particle {
   delay: number;
 }
 
-export const FloatingParticles = () => {
+interface FloatingParticlesProps {
+  showOnlyOnHome?: boolean;
+}
+
+export const FloatingParticles = ({ showOnlyOnHome = false }: FloatingParticlesProps) => {
   const [particles, setParticles] = useState<Particle[]>([]);
 
   useEffect(() => {
     const generateParticles = () => {
       const newParticles: Particle[] = [];
-      for (let i = 0; i < 15; i++) {
+      const particleCount = showOnlyOnHome ? 8 : 15; // Reduced intensity
+      for (let i = 0; i < particleCount; i++) {
         newParticles.push({
           id: i,
           x: Math.random() * 100,
-          size: Math.random() > 0.7 ? 'large' : Math.random() > 0.4 ? 'medium' : 'small',
-          delay: Math.random() * 20,
+          size: Math.random() > 0.8 ? 'large' : Math.random() > 0.6 ? 'medium' : 'small', // More subtle
+          delay: Math.random() * 30, // Slower animation
         });
       }
       setParticles(newParticles);

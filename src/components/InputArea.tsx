@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Mic, Send, Sparkles } from "lucide-react";
+import { Send, Sparkles } from "lucide-react";
+import { VoiceInput } from "./VoiceInput";
 import { toast } from "sonner";
 
 interface InputAreaProps {
@@ -11,6 +12,11 @@ interface InputAreaProps {
 
 export const InputArea = ({ onSubmit, isProcessing }: InputAreaProps) => {
   const [inputText, setInputText] = useState('');
+
+  const handleVoiceTranscription = (text: string) => {
+    setInputText(text);
+    toast.success("voice input added to text area");
+  };
 
   const handleSubmit = () => {
     if (!inputText.trim()) {
@@ -48,15 +54,10 @@ export const InputArea = ({ onSubmit, isProcessing }: InputAreaProps) => {
         </div>
         
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="lowercase"
+          <VoiceInput 
+            onTranscription={handleVoiceTranscription}
             disabled={isProcessing}
-          >
-            <Mic className="w-4 h-4 mr-2" />
-            voice input
-          </Button>
+          />
           
           <Button
             onClick={handleSubmit}
