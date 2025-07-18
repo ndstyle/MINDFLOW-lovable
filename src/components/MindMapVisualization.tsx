@@ -78,7 +78,7 @@ export const MindMapVisualization = ({ nodes }: MindMapProps) => {
         width="100%"
         height="100%"
         viewBox="0 0 800 400"
-        className="w-full h-full mind-map-svg"
+        className="w-full h-full"
       />
     </div>
   );
