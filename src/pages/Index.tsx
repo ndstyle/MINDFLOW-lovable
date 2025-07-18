@@ -24,31 +24,36 @@ const Index = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [showMindMap, setShowMindMap] = useState(false);
   const [showCategorySelector, setShowCategorySelector] = useState(false);
+  const [showInputArea, setShowInputArea] = useState(false);
   const [inputText, setInputText] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('');
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [currentMindmapId, setCurrentMindmapId] = useState<string | null>(null);
   
   const { awardXP } = useProfile();
   const { hasFeature } = useUnlockables();
+  const handleCategorySelect = async (category: string) => {
+    setSelectedCategory(category);
+    setShowCategorySelector(false);
+    setShowInputArea(true);
+  };
+
   const handleTextSubmit = async (text: string) => {
     if (!text.trim()) {
       toast.error("Please enter some text first");
       return;
     }
-    setInputText(text);
-    setShowCategorySelector(true);
-  };
-  const handleCategorySelect = async (category: string) => {
-    if (!inputText.trim()) {
-      toast.error("Please enter some text first");
-      setShowCategorySelector(false);
+    if (!selectedCategory) {
+      toast.error("Please select a category first");
       return;
     }
     
-    setIsProcessing(true);
-    setShowCategorySelector(false);
+    setInputText(text);
+    setShowInputArea(false);
     setShowMindMap(true);
+    setIsProcessing(true);
     toast.success("generating your ai-powered mind map...");
+
     try {
       const response = await fetch('https://fznyckrgwplfoqjkltbq.functions.supabase.co/generate-mindmap', {
         method: 'POST',
@@ -56,8 +61,8 @@ const Index = () => {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          text: inputText,
-          category: category
+          text: text,
+          category: selectedCategory
         })
       });
       if (!response.ok) {
@@ -73,14 +78,14 @@ const Index = () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
-          const title = inputText.substring(0, 50) + (inputText.length > 50 ? '...' : '');
+          const title = text.substring(0, 50) + (text.length > 50 ? '...' : '');
           const { data: mindmap, error: saveError } = await supabase
             .from('mindmaps')
             .insert({
               user_id: user.id,
               title,
-              content: { nodes: result.nodes || [], category, originalText: inputText },
-              category,
+              content: { nodes: result.nodes || [], category: selectedCategory, originalText: text },
+              category: selectedCategory,
               xp_earned: 10
             })
             .select()
@@ -103,7 +108,7 @@ const Index = () => {
       // Fallback to basic generation
       const fallbackNodes: MindMapNode[] = [{
         id: 'central',
-        text: inputText.substring(0, 25),
+        text: text.substring(0, 25),
         x: 400,
         y: 200,
         level: 0,
@@ -169,9 +174,8 @@ const Index = () => {
   };
   const handleTryNow = () => {
     setShowCategorySelector(true);
-    setInputText("");
   };
-  if (showCategorySelector || showMindMap) {
+  if (showCategorySelector || showInputArea || showMindMap) {
     return <div className="min-h-screen bg-background">
         <Header />
         
@@ -179,14 +183,18 @@ const Index = () => {
           <div className="max-w-6xl mx-auto space-y-8">
             <div className="text-center space-y-4">
               <h1 className="text-3xl font-bold gradient-text lowercase">
-                create your mind map
+                {showCategorySelector && "what's this mind map for?"}
+                {showInputArea && "share your thoughts"}
+                {showMindMap && "your mind map"}
               </h1>
               <p className="text-muted-foreground lowercase max-w-2xl mx-auto text-lg">
-                transform your chaotic thoughts into structured, visual mind maps
+                {showCategorySelector && "choose the type of mind map you want to create"}
+                {showInputArea && "paste or speak your chaotic thoughts and let ai organize them"}
+                {showMindMap && "transform your chaotic thoughts into structured, visual mind maps"}
               </p>
             </div>
 
-            {!showMindMap && <InputArea onSubmit={handleTextSubmit} isProcessing={isProcessing} />}
+            {showInputArea && <InputArea onSubmit={handleTextSubmit} isProcessing={isProcessing} />}
             
             <CategorySelector onCategorySelect={handleCategorySelect} isVisible={showCategorySelector} />
 
@@ -224,7 +232,9 @@ const Index = () => {
                 setMindMapNodes([]);
                 setShowMindMap(false);
                 setShowCategorySelector(false);
+                setShowInputArea(false);
                 setInputText('');
+                setSelectedCategory('');
                 setCurrentMindmapId(null);
               }} className="lowercase">
                     clear & start over
