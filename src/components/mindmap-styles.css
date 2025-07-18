@@ -1,0 +1,11 @@
+/* Custom mindmap styles */
+.mind-map-node {
+  cursor: default;
+  pointer-events: none;
+}
+
+.mind-map-connection {
+  stroke: hsl(var(--border));
+  stroke-width: 2;
+  fill: none;
+}

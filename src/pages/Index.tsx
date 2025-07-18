@@ -31,10 +31,20 @@ const Index = () => {
   const { awardXP } = useProfile();
   const { hasFeature } = useUnlockables();
   const handleTextSubmit = async (text: string) => {
+    if (!text.trim()) {
+      toast.error("Please enter some text first");
+      return;
+    }
     setInputText(text);
     setShowCategorySelector(true);
   };
   const handleCategorySelect = async (category: string) => {
+    if (!inputText.trim()) {
+      toast.error("Please enter some text first");
+      setShowCategorySelector(false);
+      return;
+    }
+    
     setIsProcessing(true);
     setShowCategorySelector(false);
     setShowMindMap(true);
@@ -58,6 +68,34 @@ const Index = () => {
         throw new Error(result.error);
       }
       setMindMapNodes(result.nodes || []);
+      
+      // Save to database and award XP
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const title = inputText.substring(0, 50) + (inputText.length > 50 ? '...' : '');
+          const { data: mindmap, error: saveError } = await supabase
+            .from('mindmaps')
+            .insert({
+              user_id: user.id,
+              title,
+              content: { nodes: result.nodes || [], category, originalText: inputText },
+              category,
+              xp_earned: 10
+            })
+            .select()
+            .single();
+
+          if (saveError) throw saveError;
+          
+          setCurrentMindmapId(mindmap.id);
+          await awardXP(10, 'Created a mind map', mindmap.id);
+        }
+      } catch (dbError) {
+        console.error('Error saving mindmap:', dbError);
+        // Don't show error to user, mindmap still works
+      }
+      
       toast.success("mind map created successfully!");
     } catch (error) {
       console.error('Error generating mind map:', error);

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import './mindmap-styles.css';
 
 interface MindMapNode {
   id: string;
@@ -86,6 +87,7 @@ export const MindMapVisualization = ({ nodes }: MindMapProps) => {
         height="100%"
         viewBox="0 0 800 400"
         className="w-full h-full"
+        style={{ pointerEvents: 'none' }}
       />
     </div>
   );
