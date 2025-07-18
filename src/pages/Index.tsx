@@ -55,20 +55,16 @@ const Index = () => {
     toast.success("generating your ai-powered mind map...");
 
     try {
-      const response = await fetch('https://fznyckrgwplfoqjkltbq.functions.supabase.co/generate-mindmap', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
+      const { data: result, error: functionError } = await supabase.functions.invoke('generate-mindmap', {
+        body: {
           text: text,
           category: selectedCategory
-        })
+        }
       });
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      
+      if (functionError) {
+        throw new Error(functionError.message);
       }
-      const result = await response.json();
       if (result.error) {
         throw new Error(result.error);
       }
