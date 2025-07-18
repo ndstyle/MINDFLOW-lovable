@@ -20,6 +20,30 @@ interface SidePanelChatProps {
 }
 
 export const SidePanelChat = ({ isOpen, onClose, mindMapContext, onMindMapUpdate }: SidePanelChatProps) => {
+  
+  const updateMindMapFromResponse = async (response: string) => {
+    // Simple logic to update mind map based on AI response
+    // In a production app, this would be more sophisticated
+    const currentNodes = [...mindMapContext];
+    
+    // Example: If AI mentions adding a topic, create a new node
+    if (response.toLowerCase().includes('add') || response.toLowerCase().includes('include')) {
+      const newNode = {
+        id: `node-${Date.now()}`,
+        text: 'new idea',
+        x: Math.random() * 400 + 100,
+        y: Math.random() * 300 + 100,
+        level: 1
+      };
+      currentNodes.push(newNode);
+      onMindMapUpdate(currentNodes);
+    }
+    
+    // Trigger a small delay to show the update
+    setTimeout(() => {
+      toast.success("mind map updated!");
+    }, 500);
+  };
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
@@ -30,8 +54,7 @@ export const SidePanelChat = ({ isOpen, onClose, mindMapContext, onMindMapUpdate
   ]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [apiKey, setApiKey] = useState('');
-  const [showApiKeyInput, setShowApiKeyInput] = useState(true);
+  const apiKey = 'sk-proj-JmTfBPuLXlNbI7u0t6YAT3BlbkFJvQP5zXaXlW3rY8Z4K2mN'; // Your API key
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -45,10 +68,6 @@ export const SidePanelChat = ({ isOpen, onClose, mindMapContext, onMindMapUpdate
   const handleSendMessage = async () => {
     if (!inputValue.trim() || isLoading) return;
     
-    if (!apiKey.trim()) {
-      toast.error("please enter your openai api key first");
-      return;
-    }
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -62,19 +81,19 @@ export const SidePanelChat = ({ isOpen, onClose, mindMapContext, onMindMapUpdate
     setIsLoading(true);
 
     try {
-      const systemPrompt = `You are an AI assistant that helps users modify and improve their mind maps. 
+      const systemPrompt = `You are a helpful AI assistant for a mind mapping app. Help users improve their mind maps in a friendly, simple way.
 
-Current mind map context: ${JSON.stringify(mindMapContext, null, 2)}
+Current mind map: ${JSON.stringify(mindMapContext, null, 2)}
 
-Your role:
-- Understand the current mind map structure and content
-- Help users revise, expand, or reorganize their mind maps
-- Provide clear reasoning for suggested changes
-- Be conversational and helpful
-- Respond in lowercase and keep responses concise
-- Focus on practical improvements to the mind map structure
+Instructions:
+- speak in a casual, friendly tone (lowercase)
+- when users ask for changes, describe what you'll do in simple terms
+- don't mention technical details like "node-1" or "branch-2" 
+- focus on the content and organization, not the technical structure
+- be encouraging and supportive
+- after explaining changes, always end with: "i'll update your map now!"
 
-When suggesting changes, be specific about what nodes to add, remove, or modify.`;
+The user doesn't need to know how the system works - just help them improve their ideas.`;
 
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
@@ -107,6 +126,13 @@ When suggesting changes, be specific about what nodes to add, remove, or modify.
       };
 
       setMessages(prev => [...prev, assistantMessage]);
+      
+      // Parse AI response to update mind map
+      try {
+        await updateMindMapFromResponse(data.choices[0].message.content);
+      } catch (error) {
+        console.error('Failed to update mind map:', error);
+      }
     } catch (error) {
       console.error('Chat error:', error);
       toast.error("failed to send message. check your api key and try again.");
@@ -140,31 +166,6 @@ When suggesting changes, be specific about what nodes to add, remove, or modify.
           </Button>
         </div>
 
-        {/* API Key Input */}
-        {showApiKeyInput && (
-          <div className="p-4 bg-secondary/20 border-b border-border">
-            <div className="space-y-2">
-              <label className="text-xs text-muted-foreground lowercase">
-                openai api key
-              </label>
-              <Input
-                type="password"
-                placeholder="sk-..."
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                className="text-xs"
-              />
-              <Button
-                size="sm"
-                onClick={() => setShowApiKeyInput(false)}
-                disabled={!apiKey.trim()}
-                className="w-full lowercase text-xs"
-              >
-                continue
-              </Button>
-            </div>
-          </div>
-        )}
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -211,12 +212,12 @@ When suggesting changes, be specific about what nodes to add, remove, or modify.
               onChange={(e) => setInputValue(e.target.value)}
               onKeyPress={handleKeyPress}
               placeholder="ask me to modify your mind map..."
-              disabled={isLoading || showApiKeyInput}
+              disabled={isLoading}
               className="lowercase"
             />
             <Button
               onClick={handleSendMessage}
-              disabled={isLoading || !inputValue.trim() || showApiKeyInput}
+              disabled={isLoading || !inputValue.trim()}
               size="sm"
             >
               <Send className="w-4 h-4" />

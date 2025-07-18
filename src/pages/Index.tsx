@@ -6,9 +6,10 @@ import { InputArea } from "@/components/InputArea";
 import { MindMapVisualization } from "@/components/MindMapVisualization";
 import { ContextQuestions } from "@/components/ContextQuestions";
 import { SidePanelChat } from "@/components/SidePanelChat";
+import { ExportShare } from "@/components/ExportShare";
 import { generateMindMapFromText } from "@/utils/mindMapGenerator";
 import { generateMindMapWithLLM } from "@/utils/llmMindMapGenerator";
-import { Zap, Users, Download, ChevronRight, Edit } from "lucide-react";
+import { Zap, Users, Download, ChevronRight, Edit, Mic, MessageCircle, Target, Bot } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 
@@ -143,15 +144,7 @@ const Index = () => {
                 <MindMapVisualization nodes={mindMapNodes} />
                 
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <Button variant="outline" size="sm" className="lowercase">
-                      <Download className="w-4 h-4 mr-2" />
-                      export as png
-                    </Button>
-                    <Button variant="outline" size="sm" className="lowercase">
-                      share mind map
-                    </Button>
-                  </div>
+                  <ExportShare mindMapData={mindMapNodes} />
                   <Button 
                     variant="ghost" 
                     size="sm" 
@@ -203,7 +196,7 @@ const Index = () => {
               <span className="gradient-text lowercase">structured mind maps</span>
             </h1>
 
-            <p className="text-base text-muted-foreground max-w-3xl mx-auto lowercase leading-relaxed">
+            <p className="text-sm text-muted-foreground max-w-3xl mx-auto lowercase leading-relaxed">
               paste or voice your chaotic thoughts and watch ai instantly create
               beautiful, interactive mind maps and project plans. no manual effort
               required.
@@ -236,7 +229,7 @@ const Index = () => {
               <Button 
                 variant="outline" 
                 size="lg" 
-                onClick={scrollToFeatures}
+                onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })}
                 className="lowercase text-base px-8 py-3"
               >
                 see features
@@ -246,24 +239,50 @@ const Index = () => {
         </section>
 
         {/* Features Section */}
-        <section id="features-section" className="container mx-auto px-6 py-16">
+        <section id="features" className="container mx-auto px-6 py-20">
           <div className="max-w-4xl mx-auto">
-            <div className="text-center space-y-4 mb-12">
+            <div className="text-center space-y-4 mb-16">
               <h2 className="text-3xl font-bold gradient-text lowercase">features</h2>
               <p className="text-muted-foreground lowercase">powerful tools for visual thinking</p>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
-              <div className="space-y-2">
-                <div className="text-4xl font-bold text-foreground">10x</div>
-                <div className="text-muted-foreground lowercase">faster planning</div>
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+              <div className="p-6 rounded-xl bg-card/50 backdrop-blur-sm border border-border/50">
+                <div className="flex items-center gap-3 mb-4">
+                  <Mic className="w-6 h-6 text-primary" />
+                  <MessageCircle className="w-6 h-6 text-primary" />
+                </div>
+                <h3 className="font-semibold mb-2 lowercase">speak or type</h3>
+                <p className="text-muted-foreground text-sm lowercase">we'll turn it into a mind map</p>
               </div>
-              <div className="space-y-2">
-                <div className="text-4xl font-bold text-foreground">95%</div>
-                <div className="text-muted-foreground lowercase">time saved</div>
+              
+              <div className="p-6 rounded-xl bg-card/50 backdrop-blur-sm border border-border/50">
+                <Zap className="w-6 h-6 text-primary mb-4" />
+                <h3 className="font-semibold mb-2 lowercase">real-time visualization</h3>
+                <p className="text-muted-foreground text-sm lowercase">watch your ideas organize themselves in real-time</p>
               </div>
-              <div className="space-y-2">
-                <div className="text-4xl font-bold text-foreground">∞</div>
-                <div className="text-muted-foreground lowercase">possibilities</div>
+              
+              <div className="p-6 rounded-xl bg-card/50 backdrop-blur-sm border border-border/50">
+                <Target className="w-6 h-6 text-primary mb-4" />
+                <h3 className="font-semibold mb-2 lowercase">smart context</h3>
+                <p className="text-muted-foreground text-sm lowercase">we ask what you're working on (notes, app, brainstorm, etc.)</p>
+              </div>
+              
+              <div className="p-6 rounded-xl bg-card/50 backdrop-blur-sm border border-border/50">
+                <Target className="w-6 h-6 text-primary mb-4" />
+                <h3 className="font-semibold mb-2 lowercase">adaptive organization</h3>
+                <p className="text-muted-foreground text-sm lowercase">your map adapts to your goal automatically</p>
+              </div>
+              
+              <div className="p-6 rounded-xl bg-card/50 backdrop-blur-sm border border-border/50">
+                <Edit className="w-6 h-6 text-primary mb-4" />
+                <h3 className="font-semibold mb-2 lowercase">quick edits</h3>
+                <p className="text-muted-foreground text-sm lowercase">need to tweak something? just click "make changes"</p>
+              </div>
+              
+              <div className="p-6 rounded-xl bg-card/50 backdrop-blur-sm border border-border/50">
+                <Bot className="w-6 h-6 text-primary mb-4" />
+                <h3 className="font-semibold mb-2 lowercase">ai assistant</h3>
+                <p className="text-muted-foreground text-sm lowercase">chat with an ai that helps expand or clean up your map</p>
               </div>
             </div>
           </div>
