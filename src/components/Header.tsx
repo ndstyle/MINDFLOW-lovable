@@ -1,46 +1,72 @@
 import { Button } from "@/components/ui/button";
-import { User } from "lucide-react";
-import { useLocation } from "react-router-dom";
+import { Link } from "react-router-dom";
+import { Zap, Palette } from "lucide-react";
+import { XPDisplay } from "@/components/XPDisplay";
+import { UnlockablesModal } from "@/components/UnlockablesModal";
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Header = () => {
-  const location = useLocation();
+  const [showUnlockables, setShowUnlockables] = useState(false);
+  const [user, setUser] = useState(null);
 
-  const scrollToFeatures = () => {
-    const featuresSection = document.getElementById('features');
-    if (featuresSection) {
-      featuresSection.scrollIntoView({ behavior: 'smooth' });
-    }
-  };
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setUser(user);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setUser(session?.user || null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   return (
-    <header className="w-full px-6 py-4 flex items-center justify-between border-b border-border/50">
-      <div className="flex items-center gap-8">
-        <div className="text-xl font-medium text-foreground lowercase">
-          Mindflow
-        </div>
+    <header className="sticky top-0 z-40 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div className="container mx-auto px-6 h-16 flex items-center justify-between">
+        <Link to="/" className="flex items-center gap-2 text-xl font-bold lowercase">
+          <Zap className="w-6 h-6 text-primary" />
+          mindflow
+        </Link>
+        
         <nav className="hidden md:flex items-center gap-6">
-          <a href="/" className="text-sm text-muted-foreground hover:text-foreground transition-colors lowercase">
+          <Link to="/" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors lowercase">
             home
-          </a>
-          <a href="/create" className="text-sm text-muted-foreground hover:text-foreground transition-colors lowercase">
-            create
-          </a>
-          <a href="/dashboard" className="text-sm text-muted-foreground hover:text-foreground transition-colors lowercase">
+          </Link>
+          <Link to="/dashboard" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors lowercase">
             dashboard
-          </a>
-          <a href="/history" className="text-sm text-muted-foreground hover:text-foreground transition-colors lowercase">
+          </Link>
+          <Link to="/history" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors lowercase">
             history
-          </a>
+          </Link>
         </nav>
+        
+        <div className="flex items-center gap-3">
+          {user && (
+            <>
+              <XPDisplay />
+              <Button 
+                size="sm" 
+                variant="outline" 
+                onClick={() => setShowUnlockables(true)}
+                className="lowercase"
+              >
+                <Palette className="w-4 h-4 mr-2" />
+                unlock
+              </Button>
+            </>
+          )}
+          <Button size="sm" className="lowercase">
+            {user ? 'create' : 'get started'}
+          </Button>
+        </div>
       </div>
-      
-      <div className="flex items-center gap-4">
-        <span className="text-sm text-muted-foreground lowercase">user@example.com</span>
-        <Button variant="ghost" size="sm" className="lowercase">
-          <User className="w-4 h-4 mr-2" />
-          sign out
-        </Button>
-      </div>
+
+      <UnlockablesModal 
+        isOpen={showUnlockables} 
+        onClose={() => setShowUnlockables(false)} 
+      />
     </header>
   );
 };

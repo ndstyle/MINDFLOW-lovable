@@ -24,9 +24,10 @@ interface SidePanelChatProps {
   onClose: () => void;
   mindMapNodes: MindMapNode[];
   onMindMapUpdate: (nodes: MindMapNode[]) => void;
+  mindmapId?: string | null;
 }
 
-export const SidePanelChat = ({ isOpen, onClose, mindMapNodes, onMindMapUpdate }: SidePanelChatProps) => {
+export const SidePanelChat = ({ isOpen, onClose, mindMapNodes, onMindMapUpdate, mindmapId }: SidePanelChatProps) => {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: 'assistant',

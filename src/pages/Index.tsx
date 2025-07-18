@@ -8,6 +8,9 @@ import { CategorySelector } from "@/components/CategorySelector";
 import { SidePanelChat } from "@/components/SidePanelChat";
 import { Zap, Users, Download, ChevronRight, MessageCircle, Share, ArrowDown } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { useProfile } from "@/hooks/useProfile";
+import { useUnlockables } from "@/hooks/useUnlockables";
 interface MindMapNode {
   id: string;
   text: string;
@@ -23,6 +26,10 @@ const Index = () => {
   const [showCategorySelector, setShowCategorySelector] = useState(false);
   const [inputText, setInputText] = useState('');
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [currentMindmapId, setCurrentMindmapId] = useState<string | null>(null);
+  
+  const { awardXP } = useProfile();
+  const { hasFeature } = useUnlockables();
   const handleTextSubmit = async (text: string) => {
     setInputText(text);
     setShowCategorySelector(true);
@@ -124,7 +131,7 @@ const Index = () => {
   };
   const handleTryNow = () => {
     setShowCategorySelector(true);
-    setInputText("I want to plan a weekend trip to the mountains with friends. Need to organize transportation, accommodation, activities, food, and budget.");
+    setInputText("");
   };
   if (showCategorySelector || showMindMap) {
     return <div className="min-h-screen bg-background">
@@ -150,9 +157,15 @@ const Index = () => {
                   <h2 className="text-xl font-semibold text-foreground lowercase">
                     your mind map
                   </h2>
-                  <Button onClick={() => setIsChatOpen(true)} className="fixed bottom-6 right-6 z-40 shadow-lg lowercase" size="lg">
+                  <Button 
+                    onClick={() => setIsChatOpen(true)} 
+                    className="fixed bottom-6 right-6 z-40 shadow-lg lowercase" 
+                    size="lg"
+                    disabled={!hasFeature('ai_chat')}
+                    title={!hasFeature('ai_chat') ? 'Unlock AI Chat Assistant for 20 XP' : ''}
+                  >
                     <MessageCircle className="w-5 h-5 mr-2" />
-                    make changes
+                    {hasFeature('ai_chat') ? 'make changes' : 'unlock chat (20 xp)'}
                   </Button>
                 </div>
                 
@@ -174,6 +187,7 @@ const Index = () => {
                 setShowMindMap(false);
                 setShowCategorySelector(false);
                 setInputText('');
+                setCurrentMindmapId(null);
               }} className="lowercase">
                     clear & start over
                   </Button>
@@ -182,7 +196,13 @@ const Index = () => {
           </div>
         </main>
 
-        <SidePanelChat isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} mindMapNodes={mindMapNodes} onMindMapUpdate={setMindMapNodes} />
+        <SidePanelChat 
+          isOpen={isChatOpen} 
+          onClose={() => setIsChatOpen(false)} 
+          mindMapNodes={mindMapNodes} 
+          onMindMapUpdate={setMindMapNodes}
+          mindmapId={currentMindmapId}
+        />
       </div>;
   }
   return <div className="min-h-screen bg-background relative overflow-hidden">

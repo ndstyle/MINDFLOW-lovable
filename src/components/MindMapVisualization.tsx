@@ -55,16 +55,22 @@ export const MindMapVisualization = ({ nodes }: MindMapProps) => {
       rect.setAttribute('stroke-width', '1');
       group.appendChild(rect);
 
-      // Node text
+      // Node text with proper wrapping
       const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
       text.setAttribute('x', '60');
       text.setAttribute('y', '20');
       text.setAttribute('text-anchor', 'middle');
       text.setAttribute('dominant-baseline', 'middle');
       text.setAttribute('fill', node.level === 0 ? 'hsl(var(--primary-foreground))' : 'hsl(var(--secondary-foreground))');
-      text.setAttribute('font-size', '12');
+      text.setAttribute('font-size', '10');
       text.setAttribute('font-family', 'Inter, sans-serif');
-      text.textContent = node.text.toLowerCase();
+      
+      // Truncate text if too long
+      const maxLength = 15;
+      const displayText = node.text.length > maxLength ? 
+        node.text.substring(0, maxLength) + '...' : 
+        node.text;
+      text.textContent = displayText.toLowerCase();
       group.appendChild(text);
 
       svg.appendChild(group);
