@@ -56,7 +56,7 @@ export const SidePanelChat = ({ isOpen, onClose, mindMapNodes, onMindMapUpdate, 
     setMessages(newMessages);
 
     try {
-      const response = await fetch('https://fznyckrgwplfoqjkltbq.functions.supabase.co/chat-assistant', {
+      const response = await fetch('/api/chat-assistant', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

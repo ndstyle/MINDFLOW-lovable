@@ -72,31 +72,9 @@ export const VoiceInput = ({ onTranscription, disabled }: VoiceInputProps) => {
       reader.onloadend = async () => {
         const base64Audio = (reader.result as string).split(',')[1];
         
-        // Send to voice-to-text function
-        const response = await fetch('https://fznyckrgwplfoqjkltbq.functions.supabase.co/voice-to-text', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ audio: base64Audio }),
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const result = await response.json();
-        
-        if (result.error) {
-          throw new Error(result.error);
-        }
-
-        if (result.text && result.text.trim()) {
-          onTranscription(result.text);
-          toast.success("voice input processed successfully!");
-        } else {
-          toast.error("no speech detected. please try again.");
-        }
+        // Voice-to-text feature temporarily disabled during migration
+        toast.info("Voice input feature is temporarily unavailable. Please type your input instead.");
+        onTranscription("Voice input is temporarily disabled during migration. Please use text input.");
       };
       
       reader.readAsDataURL(audioBlob);

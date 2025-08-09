@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation } from "wouter";
 import { Zap, Palette, LogOut } from "lucide-react";
 import { XPDisplay } from "@/components/XPDisplay";
 import { UnlockablesModal } from "@/components/UnlockablesModal";
@@ -9,14 +9,14 @@ import { toast } from "sonner";
 
 export const Header = () => {
   const { user, signOut } = useAuth();
-  const navigate = useNavigate();
+  const [location, setLocation] = useLocation();
   const [showUnlockables, setShowUnlockables] = useState(false);
 
   const handleSignOut = async () => {
     try {
       await signOut();
       toast.success("signed out successfully");
-      navigate("/auth");
+      setLocation("/auth");
     } catch (error: any) {
       toast.error("error signing out");
     }
@@ -25,21 +25,21 @@ export const Header = () => {
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto px-6 h-16 flex items-center justify-between">
-        <Link to="/" className="flex items-center gap-2 text-xl font-bold lowercase">
+        <Link href="/" className="flex items-center gap-2 text-xl font-bold lowercase">
           <Zap className="w-6 h-6 text-primary" />
           mindflow
         </Link>
         
         <nav className="hidden md:flex items-center gap-6">
-          <Link to="/" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors lowercase">
+          <Link href="/" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors lowercase">
             home
           </Link>
           {user && (
             <>
-              <Link to="/dashboard" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors lowercase">
+              <Link href="/dashboard" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors lowercase">
                 dashboard
               </Link>
-              <Link to="/history" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors lowercase">
+              <Link href="/history" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors lowercase">
                 history
               </Link>
             </>
@@ -63,7 +63,7 @@ export const Header = () => {
           )}
           {user ? (
             <>
-              <Link to="/create">
+              <Link href="/create">
                 <Button size="sm" className="lowercase">
                   create
                 </Button>
@@ -79,7 +79,7 @@ export const Header = () => {
               </Button>
             </>
           ) : (
-            <Link to="/auth">
+            <Link href="/auth">
               <Button size="sm" className="lowercase">
                 sign in
               </Button>
@@ -87,7 +87,7 @@ export const Header = () => {
           )}
         </div>
       </div>
-
+      
       <UnlockablesModal 
         isOpen={showUnlockables} 
         onClose={() => setShowUnlockables(false)} 

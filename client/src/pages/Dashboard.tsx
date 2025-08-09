@@ -3,9 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Plus, FileText, Calendar, Trash2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { useNavigate, Link } from "react-router-dom";
+import { useLocation, Link } from "wouter";
 import { toast } from "sonner";
 
 interface MindMap {
@@ -18,31 +17,30 @@ interface MindMap {
 
 const Dashboard = () => {
   const { user, loading } = useAuth();
-  const navigate = useNavigate();
+  const [location, setLocation] = useLocation();
   const [mindmaps, setMindmaps] = useState<MindMap[]>([]);
   const [loadingMindmaps, setLoadingMindmaps] = useState(true);
 
   useEffect(() => {
     if (!loading && !user) {
-      navigate("/auth");
+      setLocation("/auth");
       return;
     }
     
     if (user) {
       fetchMindmaps();
     }
-  }, [user, loading, navigate]);
+  }, [user, loading, setLocation]);
 
   const fetchMindmaps = async () => {
     try {
-      const { data, error } = await supabase
-        .from('mindmaps')
-        .select('id, title, category, created_at, xp_earned')
-        .order('created_at', { ascending: false })
-        .limit(6);
-
-      if (error) throw error;
-      setMindmaps(data || []);
+      const response = await fetch('/api/mindmaps?limit=6');
+      if (response.ok) {
+        const data = await response.json();
+        setMindmaps(data);
+      } else {
+        toast.error("failed to load mind maps");
+      }
     } catch (error) {
       console.error('Error fetching mindmaps:', error);
       toast.error("failed to load mind maps");
@@ -53,15 +51,16 @@ const Dashboard = () => {
 
   const deleteMindMap = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from('mindmaps')
-        .delete()
-        .eq('id', id);
+      const response = await fetch(`/api/mindmaps/${id}`, {
+        method: 'DELETE',
+      });
 
-      if (error) throw error;
-      
-      setMindmaps(prev => prev.filter(m => m.id !== id));
-      toast.success("mind map deleted");
+      if (response.ok) {
+        setMindmaps(prev => prev.filter(m => m.id !== id));
+        toast.success("mind map deleted");
+      } else {
+        toast.error("failed to delete mind map");
+      }
     } catch (error) {
       console.error('Error deleting mindmap:', error);
       toast.error("failed to delete mind map");

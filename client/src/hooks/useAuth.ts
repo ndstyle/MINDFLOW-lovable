@@ -1,40 +1,44 @@
 import { useState, useEffect } from "react";
-import { User, Session } from "@supabase/supabase-js";
-import { supabase } from "@/integrations/supabase/client";
+
+interface User {
+  id: string;
+  username: string;
+  email: string;
+}
 
 export const useAuth = () => {
   const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Set up auth state listener FIRST
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        setLoading(false);
-      }
-    );
-
-    // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
+    checkSession();
   }, []);
 
+  const checkSession = async () => {
+    try {
+      const response = await fetch('/api/auth/session');
+      const data = await response.json();
+      setUser(data.user);
+    } catch (error) {
+      console.error('Error checking session:', error);
+      setUser(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const signOut = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
+    try {
+      await fetch('/api/auth/signout', { method: 'POST' });
+      setUser(null);
+    } catch (error) {
+      console.error('Error signing out:', error);
+      throw error;
+    }
   };
 
   return {
     user,
-    session,
     loading,
     signOut
   };

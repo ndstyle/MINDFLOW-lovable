@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 export interface Unlockable {
@@ -17,7 +16,6 @@ export interface UserUnlockable {
   user_id: string;
   unlockable_id: string;
   unlocked_at: string;
-  unlockable: Unlockable;
 }
 
 export const useUnlockables = () => {
@@ -32,13 +30,11 @@ export const useUnlockables = () => {
 
   const fetchUnlockables = async () => {
     try {
-      const { data, error } = await supabase
-        .from('unlockables')
-        .select('*')
-        .order('xp_cost');
-
-      if (error) throw error;
-      setUnlockables((data || []) as Unlockable[]);
+      const response = await fetch('/api/unlockables');
+      if (response.ok) {
+        const data = await response.json();
+        setUnlockables(data);
+      }
     } catch (error) {
       console.error('Error fetching unlockables:', error);
     }
@@ -46,22 +42,11 @@ export const useUnlockables = () => {
 
   const fetchUserUnlockables = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        setLoading(false);
-        return;
+      const response = await fetch('/api/user-unlockables');
+      if (response.ok) {
+        const data = await response.json();
+        setUserUnlockables(data);
       }
-
-      const { data, error } = await supabase
-        .from('user_unlockables')
-        .select(`
-          *,
-          unlockable:unlockables(*)
-        `)
-        .eq('user_id', user.id);
-
-      if (error) throw error;
-      setUserUnlockables((data || []) as UserUnlockable[]);
     } catch (error) {
       console.error('Error fetching user unlockables:', error);
     } finally {
@@ -71,9 +56,6 @@ export const useUnlockables = () => {
 
   const unlockItem = async (unlockableId: string, spendXPFunction: (amount: number, reason: string) => Promise<boolean>) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return false;
-
       const unlockable = unlockables.find(u => u.id === unlockableId);
       if (!unlockable) return false;
 
@@ -83,33 +65,33 @@ export const useUnlockables = () => {
         return false;
       }
 
-      // Spend XP
+      // Spend XP first
       const success = await spendXPFunction(unlockable.xp_cost, unlockable.name);
       if (!success) {
-        toast.error('Not enough XP!');
         return false;
       }
 
       // Unlock item
-      const { data, error } = await supabase
-        .from('user_unlockables')
-        .insert({
-          user_id: user.id,
-          unlockable_id: unlockableId
-        })
-        .select(`
-          *,
-          unlockable:unlockables(*)
-        `)
-        .single();
+      const response = await fetch('/api/unlock-item', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ unlockableId }),
+      });
 
-      if (error) throw error;
-
-      setUserUnlockables([...userUnlockables, data as UserUnlockable]);
-      toast.success(`🎉 Unlocked ${unlockable.name}!`);
-      return true;
+      if (response.ok) {
+        await fetchUserUnlockables();
+        toast.success(`${unlockable.name} unlocked!`);
+        return true;
+      } else {
+        const error = await response.json();
+        toast.error(error.error || 'Failed to unlock item');
+        return false;
+      }
     } catch (error) {
       console.error('Error unlocking item:', error);
+      toast.error('Failed to unlock item');
       return false;
     }
   };
@@ -119,10 +101,9 @@ export const useUnlockables = () => {
   };
 
   const hasFeature = (featureName: string) => {
-    return userUnlockables.some(u => 
-      u.unlockable.type === 'feature' && 
-      u.unlockable.config?.feature === featureName
-    );
+    const unlockable = unlockables.find(u => u.name === featureName && u.type === 'feature');
+    if (!unlockable) return false;
+    return hasUnlocked(unlockable.id);
   };
 
   return {

@@ -37,7 +37,7 @@ const Create = () => {
     toast.success("generating your ai-powered mind map...");
 
     try {
-      const response = await fetch('https://fznyckrgwplfoqjkltbq.functions.supabase.co/generate-mindmap', {
+      const response = await fetch('/api/generate-mindmap', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

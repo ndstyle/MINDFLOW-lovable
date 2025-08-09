@@ -8,7 +8,7 @@ import { CategorySelector } from "@/components/CategorySelector";
 import { SidePanelChat } from "@/components/SidePanelChat";
 import { Zap, Users, Download, ChevronRight, MessageCircle, Share, ArrowDown } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+
 import { useProfile } from "@/hooks/useProfile";
 import { useUnlockables } from "@/hooks/useUnlockables";
 interface MindMapNode {
@@ -55,40 +55,47 @@ const Index = () => {
     toast.success("generating your ai-powered mind map...");
 
     try {
-      const { data: result, error: functionError } = await supabase.functions.invoke('generate-mindmap', {
-        body: {
+      const response = await fetch('/api/generate-mindmap', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
           text: text,
           category: selectedCategory
-        }
+        }),
       });
-      
-      if (functionError) {
-        throw new Error(functionError.message);
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
+
+      const result = await response.json();
+      
       if (result.error) {
         throw new Error(result.error);
       }
+
       setMindMapNodes(result.nodes || []);
       
       // Save to database and award XP
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const title = text.substring(0, 50) + (text.length > 50 ? '...' : '');
-          const { data: mindmap, error: saveError } = await supabase
-            .from('mindmaps')
-            .insert({
-              user_id: user.id,
-              title,
-              content: { nodes: result.nodes || [], category: selectedCategory, originalText: text },
-              category: selectedCategory,
-              xp_earned: 10
-            })
-            .select()
-            .single();
+        const title = text.substring(0, 50) + (text.length > 50 ? '...' : '');
+        const mindmapResponse = await fetch('/api/mindmaps', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            title,
+            content: { nodes: result.nodes || [], category: selectedCategory, originalText: text },
+            category: selectedCategory,
+            xp_earned: 10
+          }),
+        });
 
-          if (saveError) throw saveError;
-          
+        if (mindmapResponse.ok) {
+          const mindmap = await mindmapResponse.json();
           setCurrentMindmapId(mindmap.id);
           await awardXP(10, 'Created a mind map', mindmap.id);
         }

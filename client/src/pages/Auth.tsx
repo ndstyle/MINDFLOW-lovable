@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,44 +7,49 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Header } from "@/components/Header";
+import { useAuth } from "@/hooks/useAuth";
 
 const Auth = () => {
   const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
+  const [location, setLocation] = useLocation();
+  const { user } = useAuth();
 
   useEffect(() => {
-    // Check if user is already logged in
-    const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        navigate("/");
-      }
-    };
-    checkAuth();
-  }, [navigate]);
+    if (user) {
+      setLocation("/");
+    }
+  }, [user, setLocation]);
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      const redirectUrl = `${window.location.origin}/`;
-      
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: redirectUrl
-        }
+      const response = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username,
+          email,
+          password,
+        }),
       });
 
-      if (error) throw error;
+      const data = await response.json();
 
-      toast.success("signup successful! check your email to confirm your account.");
+      if (response.ok) {
+        toast.success("Account created successfully!");
+        setLocation("/");
+      } else {
+        toast.error(data.error || "Signup failed");
+      }
     } catch (error: any) {
-      toast.error(error.message || "signup failed");
+      toast.error("Signup failed");
     } finally {
       setLoading(false);
     }
@@ -56,19 +60,27 @@ const Auth = () => {
     setLoading(true);
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      const response = await fetch('/api/auth/signin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email,
+          password,
+        }),
       });
 
-      if (error) throw error;
-      
-      if (data.user) {
-        toast.success("login successful!");
-        navigate("/");
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success("Login successful!");
+        setLocation("/");
+      } else {
+        toast.error(data.error || "Login failed");
       }
     } catch (error: any) {
-      toast.error(error.message || "login failed");
+      toast.error("Login failed");
     } finally {
       setLoading(false);
     }
@@ -129,7 +141,11 @@ const Auth = () => {
                         className="lowercase placeholder:lowercase"
                       />
                     </div>
-                    <Button type="submit" className="w-full lowercase" disabled={loading}>
+                    <Button 
+                      type="submit" 
+                      className="w-full lowercase"
+                      disabled={loading}
+                    >
                       {loading ? "signing in..." : "sign in"}
                     </Button>
                   </form>
@@ -137,6 +153,18 @@ const Auth = () => {
                 
                 <TabsContent value="signup">
                   <form onSubmit={handleSignUp} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="signup-username" className="lowercase">username</Label>
+                      <Input
+                        id="signup-username"
+                        type="text"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        placeholder="choose a username"
+                        required
+                        className="lowercase placeholder:lowercase"
+                      />
+                    </div>
                     <div className="space-y-2">
                       <Label htmlFor="signup-email" className="lowercase">email</Label>
                       <Input
@@ -161,7 +189,11 @@ const Auth = () => {
                         className="lowercase placeholder:lowercase"
                       />
                     </div>
-                    <Button type="submit" className="w-full lowercase" disabled={loading}>
+                    <Button 
+                      type="submit" 
+                      className="w-full lowercase"
+                      disabled={loading}
+                    >
                       {loading ? "creating account..." : "sign up"}
                     </Button>
                   </form>
