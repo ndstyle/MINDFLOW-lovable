@@ -22,7 +22,10 @@ export const useProfile = () => {
 
   const fetchProfile = async () => {
     try {
-      const response = await fetch('/api/profile');
+      const token = localStorage.getItem('supabase_token');
+      const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+      
+      const response = await fetch('/api/profile', { headers });
       if (response.ok) {
         const data = await response.json();
         setProfile(data);
@@ -36,12 +39,18 @@ export const useProfile = () => {
 
   const awardXP = async (amount: number, reason: string, mindmapId?: string) => {
     try {
-      const response = await fetch('/api/profile/award-xp', {
+      const token = localStorage.getItem('supabase_token');
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
+      const response = await fetch('/api/xp-transactions', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ amount, reason, mindmapId }),
+        headers,
+        body: JSON.stringify({ amount, type: 'earned', reason, mindmap_id: mindmapId }),
       });
 
       if (response.ok) {

@@ -1,40 +1,29 @@
-import { eq, desc, and } from "drizzle-orm";
-import { db } from "./db";
-import { 
-  users, 
-  profiles, 
-  mindmaps, 
-  xpTransactions, 
-  unlockables, 
-  userUnlockables,
-  type User, 
-  type InsertUser,
-  type Profile,
-  type InsertProfile,
-  type Mindmap,
-  type InsertMindmap,
-  type XpTransaction,
-  type InsertXpTransaction,
-  type Unlockable,
-  type UserUnlockable,
-  type InsertUserUnlockable
-} from "@shared/schema";
+import { supabaseAdmin } from './supabase';
+import type { 
+  Profile, 
+  InsertProfile, 
+  UpdateProfile,
+  Mindmap, 
+  InsertMindmap, 
+  UpdateMindmap,
+  XpTransaction, 
+  InsertXpTransaction,
+  Unlockable, 
+  UserUnlockable, 
+  InsertUserUnlockable 
+} from '@shared/supabase-types';
 
 export interface IStorage {
-  // User operations
-  getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  getUserByEmail(email: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
-  
-  // Profile operations
+  // Profile operations (using Supabase Auth)
   getProfile(userId: string): Promise<Profile | undefined>;
   createProfile(profile: InsertProfile): Promise<Profile>;
-  updateProfile(userId: string, updates: Partial<Profile>): Promise<Profile>;
+  updateProfile(userId: string, updates: UpdateProfile): Promise<Profile>;
   
   // Mindmap operations
   getMindmaps(userId: string, limit?: number): Promise<Mindmap[]>;
+  getMindmap(id: string, userId: string): Promise<Mindmap | undefined>;
   createMindmap(mindmap: InsertMindmap): Promise<Mindmap>;
+  updateMindmap(id: string, userId: string, updates: UpdateMindmap): Promise<Mindmap | undefined>;
   deleteMindmap(id: string, userId: string): Promise<boolean>;
   
   // XP operations
@@ -45,154 +34,198 @@ export interface IStorage {
   getUnlockables(): Promise<Unlockable[]>;
   getUserUnlockables(userId: string): Promise<UserUnlockable[]>;
   createUserUnlockable(userUnlockable: InsertUserUnlockable): Promise<UserUnlockable>;
-  
-  // Seed data
-  seedUnlockables(): Promise<void>;
 }
 
-export class DatabaseStorage implements IStorage {
-  // User operations
-  async getUser(id: string): Promise<User | undefined> {
-    const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
-    return result[0];
-  }
-
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    const result = await db.select().from(users).where(eq(users.username, username)).limit(1);
-    return result[0];
-  }
-
-  async getUserByEmail(email: string): Promise<User | undefined> {
-    const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
-    return result[0];
-  }
-
-  async createUser(user: InsertUser): Promise<User> {
-    const result = await db.insert(users).values(user).returning();
-    return result[0];
-  }
-
-  // Profile operations
+export class SupabaseStorage implements IStorage {
   async getProfile(userId: string): Promise<Profile | undefined> {
-    const result = await db.select().from(profiles).where(eq(profiles.user_id, userId)).limit(1);
-    return result[0];
+    const { data, error } = await supabaseAdmin
+      .from('profiles')
+      .select('*')
+      .eq('user_id', userId)
+      .single();
+    
+    if (error) {
+      console.error('Error fetching profile:', error);
+      return undefined;
+    }
+    
+    return data;
   }
 
   async createProfile(profile: InsertProfile): Promise<Profile> {
-    const result = await db.insert(profiles).values(profile).returning();
-    return result[0];
-  }
-
-  async updateProfile(userId: string, updates: Partial<Profile>): Promise<Profile> {
-    const result = await db.update(profiles)
-      .set({ ...updates, updated_at: new Date() })
-      .where(eq(profiles.user_id, userId))
-      .returning();
-    return result[0];
-  }
-
-  // Mindmap operations
-  async getMindmaps(userId: string, limit?: number): Promise<Mindmap[]> {
-    let query = db.select().from(mindmaps)
-      .where(eq(mindmaps.user_id, userId))
-      .orderBy(desc(mindmaps.created_at));
+    const { data, error } = await supabaseAdmin
+      .from('profiles')
+      .insert(profile)
+      .select()
+      .single();
     
-    if (limit) {
-      query = query.limit(limit);
+    if (error) {
+      throw new Error(`Failed to create profile: ${error.message}`);
     }
     
-    return await query;
+    return data;
+  }
+
+  async updateProfile(userId: string, updates: UpdateProfile): Promise<Profile> {
+    const { data, error } = await supabaseAdmin
+      .from('profiles')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('user_id', userId)
+      .select()
+      .single();
+    
+    if (error) {
+      throw new Error(`Failed to update profile: ${error.message}`);
+    }
+    
+    return data;
+  }
+
+  async getMindmaps(userId: string, limit = 20): Promise<Mindmap[]> {
+    const { data, error } = await supabaseAdmin
+      .from('mindmaps')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    
+    if (error) {
+      throw new Error(`Failed to fetch mindmaps: ${error.message}`);
+    }
+    
+    return data || [];
+  }
+
+  async getMindmap(id: string, userId: string): Promise<Mindmap | undefined> {
+    const { data, error } = await supabaseAdmin
+      .from('mindmaps')
+      .select('*')
+      .eq('id', id)
+      .eq('user_id', userId)
+      .single();
+    
+    if (error) {
+      console.error('Error fetching mindmap:', error);
+      return undefined;
+    }
+    
+    return data;
   }
 
   async createMindmap(mindmap: InsertMindmap): Promise<Mindmap> {
-    const result = await db.insert(mindmaps).values(mindmap).returning();
-    return result[0];
+    const { data, error } = await supabaseAdmin
+      .from('mindmaps')
+      .insert(mindmap)
+      .select()
+      .single();
+    
+    if (error) {
+      throw new Error(`Failed to create mindmap: ${error.message}`);
+    }
+    
+    return data;
+  }
+
+  async updateMindmap(id: string, userId: string, updates: UpdateMindmap): Promise<Mindmap | undefined> {
+    const { data, error } = await supabaseAdmin
+      .from('mindmaps')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .eq('user_id', userId)
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Error updating mindmap:', error);
+      return undefined;
+    }
+    
+    return data;
   }
 
   async deleteMindmap(id: string, userId: string): Promise<boolean> {
-    const result = await db.delete(mindmaps)
-      .where(and(eq(mindmaps.id, id), eq(mindmaps.user_id, userId)))
-      .returning();
-    return result.length > 0;
+    const { error } = await supabaseAdmin
+      .from('mindmaps')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', userId);
+    
+    if (error) {
+      console.error('Error deleting mindmap:', error);
+      return false;
+    }
+    
+    return true;
   }
 
-  // XP operations
   async createXpTransaction(transaction: InsertXpTransaction): Promise<XpTransaction> {
-    const result = await db.insert(xpTransactions).values(transaction).returning();
-    return result[0];
+    const { data, error } = await supabaseAdmin
+      .from('xp_transactions')
+      .insert(transaction)
+      .select()
+      .single();
+    
+    if (error) {
+      throw new Error(`Failed to create XP transaction: ${error.message}`);
+    }
+    
+    return data;
   }
 
   async getXpTransactions(userId: string): Promise<XpTransaction[]> {
-    return await db.select().from(xpTransactions)
-      .where(eq(xpTransactions.user_id, userId))
-      .orderBy(desc(xpTransactions.created_at));
+    const { data, error } = await supabaseAdmin
+      .from('xp_transactions')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      throw new Error(`Failed to fetch XP transactions: ${error.message}`);
+    }
+    
+    return data || [];
   }
 
-  // Unlockables operations
   async getUnlockables(): Promise<Unlockable[]> {
-    return await db.select().from(unlockables).orderBy(unlockables.xp_cost);
+    const { data, error } = await supabaseAdmin
+      .from('unlockables')
+      .select('*')
+      .order('xp_cost', { ascending: true });
+    
+    if (error) {
+      throw new Error(`Failed to fetch unlockables: ${error.message}`);
+    }
+    
+    return data || [];
   }
 
   async getUserUnlockables(userId: string): Promise<UserUnlockable[]> {
-    return await db.select({
-      id: userUnlockables.id,
-      user_id: userUnlockables.user_id,
-      unlockable_id: userUnlockables.unlockable_id,
-      unlocked_at: userUnlockables.unlocked_at,
-    }).from(userUnlockables)
-      .where(eq(userUnlockables.user_id, userId));
+    const { data, error } = await supabaseAdmin
+      .from('user_unlockables')
+      .select('*')
+      .eq('user_id', userId)
+      .order('unlocked_at', { ascending: false });
+    
+    if (error) {
+      throw new Error(`Failed to fetch user unlockables: ${error.message}`);
+    }
+    
+    return data || [];
   }
 
   async createUserUnlockable(userUnlockable: InsertUserUnlockable): Promise<UserUnlockable> {
-    const result = await db.insert(userUnlockables).values(userUnlockable).returning();
-    return result[0];
-  }
-
-  // Seed data
-  async seedUnlockables(): Promise<void> {
-    const existingUnlockables = await this.getUnlockables();
-    if (existingUnlockables.length > 0) return;
-
-    const seedData = [
-      {
-        name: 'AI Chat Assistant',
-        type: 'feature',
-        xp_cost: 20,
-        description: 'Unlock the ability to chat with AI to edit your mindmaps',
-        config: { feature: 'ai_chat' }
-      },
-      {
-        name: 'Ocean Theme',
-        type: 'color_theme',
-        xp_cost: 15,
-        description: 'Blue ocean color theme for your mindmaps',
-        config: { primary: 'hsl(200, 100%, 50%)', secondary: 'hsl(210, 100%, 90%)' }
-      },
-      {
-        name: 'Forest Theme',
-        type: 'color_theme',
-        xp_cost: 15,
-        description: 'Green forest color theme for your mindmaps',
-        config: { primary: 'hsl(120, 60%, 40%)', secondary: 'hsl(120, 40%, 90%)' }
-      },
-      {
-        name: 'Sunset Theme',
-        type: 'color_theme',
-        xp_cost: 15,
-        description: 'Orange sunset color theme for your mindmaps',
-        config: { primary: 'hsl(25, 100%, 50%)', secondary: 'hsl(25, 100%, 90%)' }
-      },
-      {
-        name: 'Purple Galaxy',
-        type: 'color_theme',
-        xp_cost: 25,
-        description: 'Premium purple galaxy theme',
-        config: { primary: 'hsl(270, 80%, 50%)', secondary: 'hsl(270, 60%, 90%)' }
-      }
-    ];
-
-    await db.insert(unlockables).values(seedData);
+    const { data, error } = await supabaseAdmin
+      .from('user_unlockables')
+      .insert(userUnlockable)
+      .select()
+      .single();
+    
+    if (error) {
+      throw new Error(`Failed to create user unlockable: ${error.message}`);
+    }
+    
+    return data;
   }
 }
 
-export const storage = new DatabaseStorage();
+export const storage = new SupabaseStorage();

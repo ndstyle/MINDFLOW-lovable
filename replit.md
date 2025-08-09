@@ -26,13 +26,17 @@ Preferred communication style: Simple, everyday language.
 - **API Design**: RESTful API endpoints with proper error handling and logging middleware
 
 ### Database Design
-- **ORM**: Drizzle ORM for type-safe database operations
+- **Database**: Supabase PostgreSQL cloud database
+- **Backend Integration**: @supabase/supabase-js client for all database operations
+- **Authentication**: Supabase Auth with email/password (no magic links)
 - **Schema Structure**:
-  - Users table for authentication (username, email, password)
-  - Profiles table for user data and gamification (XP, level)
+  - Profiles table for user data and gamification (XP, level) - linked to Supabase Auth users
   - Mindmaps table for storing generated mind maps with JSON content
   - XP transactions table for tracking experience point changes
   - Unlockables and user_unlockables tables for gamification features
+  - Quizzes table for AI-generated quizzes from mindmaps
+  - Flashcards table for AI-generated flashcard sets
+  - Collab_sessions table for collaborative mind map editing with share tokens
 
 ### Key Features Architecture
 - **AI Integration**: OpenAI GPT-4o-mini for mind map generation and chat assistance
@@ -43,9 +47,10 @@ Preferred communication style: Simple, everyday language.
 - **Export/Share**: Mind map export and collaboration via session tokens
 
 ### Authentication System
-- **Strategy**: Email/password authentication without magic links
-- **Session Storage**: Server-side sessions with secure HTTP-only cookies
-- **Authorization**: Route-based protection with middleware authentication checks
+- **Strategy**: Supabase Auth with email/password authentication (no magic links)
+- **Session Storage**: Supabase session tokens stored in localStorage, validated server-side
+- **Authorization**: Express middleware validates Supabase JWT tokens for API access
+- **Profile Management**: Automatic profile creation linked to Supabase Auth users
 
 ## External Dependencies
 
@@ -54,9 +59,10 @@ Preferred communication style: Simple, everyday language.
 - **Speech Recognition**: Browser-native Web Speech API for voice input processing
 
 ### Database & Hosting
-- **PostgreSQL**: Primary database using Neon serverless PostgreSQL
-- **Database Connection**: @neondatabase/serverless with connection pooling
-- **WebSocket Support**: ws library for Neon database connections
+- **Supabase**: Cloud PostgreSQL database with built-in authentication
+- **Database Connection**: @supabase/supabase-js for client and admin operations
+- **Row Level Security**: Supabase RLS policies for data access control
+- **Real-time Features**: Supabase real-time subscriptions for collaboration
 
 ### UI & Styling
 - **Radix UI**: Comprehensive set of unstyled, accessible UI primitives
