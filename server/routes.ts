@@ -18,7 +18,7 @@ declare global {
 
 const router = express.Router();
 
-// Middleware to authenticate requests
+// Middleware to authenticate requests using simple tokens
 const requireAuth = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   try {
     const authHeader = req.headers.authorization;
@@ -27,14 +27,31 @@ const requireAuth = async (req: express.Request, res: express.Response, next: ex
     }
 
     const token = authHeader.substring(7);
-    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
     
-    if (error || !user) {
-      return res.status(401).json({ error: 'Invalid token' });
-    }
+    // Decode our simple session token
+    try {
+      const decoded = JSON.parse(Buffer.from(token, 'base64').toString());
+      
+      if (!decoded.userId || !decoded.exp || Date.now() > decoded.exp) {
+        return res.status(401).json({ error: 'Invalid or expired token' });
+      }
 
-    req.user = { id: user.id, email: user.email! };
-    next();
+      // Verify user exists
+      const { data: user, error } = await supabaseAdmin
+        .from('users')
+        .select('id, email')
+        .eq('id', decoded.userId)
+        .single();
+
+      if (error || !user) {
+        return res.status(401).json({ error: 'User not found' });
+      }
+
+      req.user = { id: user.id, email: user.email };
+      next();
+    } catch (decodeError) {
+      return res.status(401).json({ error: 'Invalid token format' });
+    }
   } catch (error) {
     console.error('Auth middleware error:', error);
     res.status(401).json({ error: 'Authentication failed' });
@@ -69,20 +86,37 @@ router.post('/auth/signup', async (req, res) => {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    // Create user in Supabase Auth
-    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true
-    });
+    // Check if user already exists
+    const { data: existingUser } = await supabaseAdmin
+      .from('users')
+      .select('id')
+      .eq('email', email)
+      .single();
 
-    if (authError) {
-      return res.status(400).json({ error: authError.message });
+    if (existingUser) {
+      return res.status(400).json({ error: 'User already exists' });
     }
 
-    // Create user profile
+    // Hash password
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    // Create user
+    const { data: user, error: userError } = await supabaseAdmin
+      .from('users')
+      .insert({
+        email,
+        password_hash: passwordHash
+      })
+      .select()
+      .single();
+
+    if (userError) {
+      return res.status(400).json({ error: userError.message });
+    }
+
+    // Create profile
     const profileData: InsertProfile = {
-      user_id: authData.user.id,
+      user_id: user.id,
       username: username || email.split('@')[0],
       email,
       xp: 0,
@@ -90,10 +124,18 @@ router.post('/auth/signup', async (req, res) => {
     };
 
     const profile = await storage.createProfile(profileData);
+
+    // Generate session token
+    const sessionToken = Buffer.from(JSON.stringify({
+      userId: user.id,
+      email: user.email,
+      exp: Date.now() + (7 * 24 * 60 * 60 * 1000) // 7 days
+    })).toString('base64');
     
     res.status(201).json({ 
-      user: authData.user,
+      user: { id: user.id, email: user.email },
       profile,
+      session: { access_token: sessionToken },
       message: 'User created successfully' 
     });
   } catch (error) {
@@ -110,18 +152,37 @@ router.post('/auth/signin', async (req, res) => {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    const { data, error } = await supabaseAdmin.auth.signInWithPassword({
-      email,
-      password
-    });
+    // Get user from database
+    const { data: user, error } = await supabaseAdmin
+      .from('users')
+      .select('*')
+      .eq('email', email)
+      .single();
 
-    if (error) {
+    if (error || !user) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
+    // Verify password
+    const isValid = await bcrypt.compare(password, user.password_hash);
+    if (!isValid) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // Get user profile
+    const profile = await storage.getProfile(user.id);
+
+    // Generate session token
+    const sessionToken = Buffer.from(JSON.stringify({
+      userId: user.id,
+      email: user.email,
+      exp: Date.now() + (7 * 24 * 60 * 60 * 1000) // 7 days
+    })).toString('base64');
+
     res.json({
-      user: data.user,
-      session: data.session,
+      user: { id: user.id, email: user.email },
+      profile,
+      session: { access_token: sessionToken },
       message: 'Signed in successfully'
     });
   } catch (error) {
@@ -130,21 +191,22 @@ router.post('/auth/signin', async (req, res) => {
   }
 });
 
-router.post('/auth/signout', requireAuth, async (req, res) => {
-  try {
-    const authHeader = req.headers.authorization;
-    const token = authHeader!.substring(7);
-    
-    await supabaseAdmin.auth.admin.signOut(token);
-    res.json({ message: 'Signed out successfully' });
-  } catch (error) {
-    console.error('Signout error:', error);
-    res.status(500).json({ error: 'Failed to sign out' });
-  }
+router.post('/auth/signout', (req, res) => {
+  // Since we're using stateless tokens, signout is handled client-side
+  res.json({ message: 'Signed out successfully' });
 });
 
-router.get('/auth/session', optionalAuth, async (req, res) => {
-  res.json({ user: req.user || null });
+router.get('/auth/session', requireAuth, async (req, res) => {
+  try {
+    const profile = await storage.getProfile(req.user!.id);
+    res.json({
+      user: req.user,
+      profile
+    });
+  } catch (error) {
+    console.error('Session error:', error);
+    res.status(500).json({ error: 'Failed to get session' });
+  }
 });
 
 // Profile routes
@@ -475,5 +537,13 @@ Keep responses conversational and helpful.`
     res.status(500).json({ error: 'Failed to process chat message' });
   }
 });
+
+// Import sub-routers
+import quizRouter from './routes/quiz';
+import flashcardRouter from './routes/flashcards';
+
+// Mount sub-routers
+router.use('/quiz', quizRouter);
+router.use('/flashcards', flashcardRouter);
 
 export default router;

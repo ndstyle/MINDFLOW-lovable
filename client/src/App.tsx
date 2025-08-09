@@ -8,6 +8,8 @@ import Create from "./pages/Create";
 import Dashboard from "./pages/Dashboard";
 import History from "./pages/History";
 import Auth from "./pages/Auth";
+import Quiz from "./pages/Quiz";
+import Flashcards from "./pages/Flashcards";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -24,6 +26,8 @@ const App = () => (
           <Route path="/dashboard" component={Dashboard} />
           <Route path="/history" component={History} />
           <Route path="/auth" component={Auth} />
+          <Route path="/quiz/:quizId" component={Quiz} />
+          <Route path="/flashcards/:flashcardId" component={Flashcards} />
           <Route component={NotFound} />
         </Switch>
       </Router>

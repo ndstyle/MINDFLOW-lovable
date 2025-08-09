@@ -1,0 +1,65 @@
+Building on the completed Supabase cloud integration, implement a comprehensive learning suite centered on a **powerful quiz system inspired by Knowt and Quizlet**, along with flashcards, advanced mindmap features, AI chatbot improvements, collaboration, and gamification enhancements, fully integrated and tested end-to-end:
+
+**Quiz System (Knowt/Quizlet style):**  
+- AI-generated quizzes analyzing mindmap content with diverse question types: multiple-choice (single and multi-select), true/false, fill-in-the-blank, and matching pairs.  
+- Questions cover key concepts, definitions, and relationships, with difficulty levels inferred from node importance and user history.  
+- Intuitive, clean frontend UI featuring:  
+  - Clear question presentation with appropriate input controls (radio buttons, checkboxes, drag-and-drop).  
+  - Immediate feedback after each question highlighting correct answers and explanations.  
+  - Navigation to skip, review, or revisit questions before final submission.  
+  - Optional timers for quizzes or individual questions.  
+- Progress tracking with XP awarding based on accuracy, speed, and streaks; dynamic display of progress bars, scores, and achievement badges.  
+- Study mode with hints and explanations, and test mode simulating exam conditions with no immediate feedback.  
+- Fully accessible and mobile-responsive quiz interface.  
+- Backend stores quizzes and user responses in Supabase with rich schema supporting all question types, options, answers, explanations, and attempt history; strict RLS enforcement ensures user data privacy.  
+- API endpoints for quiz creation, retrieval, submission, grading, and exporting quizzes as PDFs.  
+- Shareable quiz links with controlled access.
+
+**Flashcards:**  
+- AI-generated flashcards from mindmaps with Q/A pairs.  
+- Interactive frontend with flip animations, known/unknown tracking, and XP rewards.  
+- Backend storage and APIs fully integrated with Supabase and RLS.
+
+**Enhanced Mindmap Visualization:**  
+- Drag-and-drop node repositioning with snap-to-grid and smooth animations.  
+- Animated edges with highlight effects on hover.  
+- Distinct icons/colors per node type and detailed tooltips.  
+- Zoom-to-node search functionality.
+
+**AI Chatbot Enhancements:**  
+- Context-aware commands enabling add/remove nodes, selective quiz/flashcard generation, and node styling (colors/icons).  
+- Real-time syncing of edits to Supabase backend.
+
+**Collaboration:**  
+- Backend collaboration sessions with shareable tokens supporting read/write permissions.  
+- Frontend UI for generating share links, joining sessions, and real-time updates between collaborators.
+
+**Gamification Expansion:**  
+- Achievement system tracking streaks, quiz mastery, and flashcard progress.  
+- Unlockable themes and features that modify mindmap appearance and app UI.
+
+**Innovative Features:**  
+- Smart AI-generated summaries of mindmaps or branches.  
+- Adaptive learning paths personalized by quiz and flashcard performance.  
+- Version history with undo/redo capabilities for mindmaps.  
+- Offline mode with local caching and sync on reconnect.  
+- Multimedia node support (images, videos, audio).  
+- Mindmap templates for common use cases.  
+- Custom node styling saved per user.  
+- Notifications and reminders for practice and updates.  
+- Multi-format exports: PDF, Markdown, OPML, interactive HTML.  
+- AI-powered natural language search across mindmaps.  
+- Integration with calendar and task managers.  
+- Collaborative annotations with comments, highlights, and voice notes.  
+- Accessibility improvements including keyboard navigation and screen reader support.  
+- Public API exposing core functionality for third-party integrations.
+
+**Technical Requirements:**  
+- All backend database and auth operations use Supabase JS client with strict enforcement of RLS policies.  
+- Authentication via Supabase email/password and JWT validation on backend.  
+- Frontend consumes updated API endpoints with graceful error handling and loading states.  
+- Modular implementation with clear separation of concerns, enabling phased development and testing.  
+- Preserve all existing working features; extend and integrate cleanly.  
+- Prioritize performance, security, and a polished, engaging user experience.
+
+Deliver a visually appealing, highly interactive, and user-centric learning platform combining AI-powered content generation, deep customization, and collaborative learning, fully hosted and running seamlessly on Replit with Supabase backend.

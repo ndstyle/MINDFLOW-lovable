@@ -190,7 +190,7 @@ export class SupabaseStorage implements IStorage {
     const { data, error } = await supabaseAdmin
       .from('unlockables')
       .select('*')
-      .order('xp_cost', { ascending: true });
+      .order('created_at', { ascending: true });
     
     if (error) {
       throw new Error(`Failed to fetch unlockables: ${error.message}`);
