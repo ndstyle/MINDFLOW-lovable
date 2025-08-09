@@ -1,0 +1,58 @@
+Add and fully integrate **Supabase cloud backend** for authentication and persistent storage, replacing any direct PostgreSQL calls with Supabase JS client calls. Use the Supabase project that has been recreated with the following schema and RLS policies (see below).  
+
+Additionally, implement these key new features end-to-end:  
+1. **Quizzes:**  
+   - Backend API routes for generating quizzes from mindmaps (`POST /quiz/generate`), fetching (`GET /quiz/:mindmapId`), and submitting results (`POST /quiz/submit` with XP awarding).  
+   - Frontend quiz UI page with MCQs, submission, feedback, and XP progress updates.  
+
+2. **Flashcards:**  
+   - Backend API for flashcard generation (`POST /flashcards/generate`) and retrieval (`GET /flashcards/:mindmapId`).  
+   - Frontend flashcard page with flip animations, known/unknown tracking, and XP rewards.  
+
+3. **Enhanced Mindmap Visualization:**  
+   - Interactive drag-and-drop with snap-to-grid layout.  
+   - Animated edges and highlight on hover.  
+   - Node types with distinct icons/colors and tooltips.  
+   - Zoom-to-node on search.  
+
+4. **AI Chatbot Editing:**  
+   - Context-aware chat commands to add/remove nodes, generate quizzes/flashcards on subsets, and apply styles.  
+   - Auto-sync all changes to the mindmap data in Supabase.  
+
+5. **Collaboration:**  
+   - Backend tables and API routes for collaboration sessions with shareable tokens.  
+   - Frontend UI to generate/share collaboration links and join live sessions with real-time updates.  
+
+6. **Gamification Enhancements:**  
+   - Achievements (e.g., streaks, quiz master).  
+   - Unlockable themes that change mindmap appearance.  
+
+Technical and integration requirements:  
+- Use Supabase JS client in backend for all DB/auth interactions.  
+- Authentication via Supabase email/password only (no magic links).  
+- Sessions handled in Express middleware, syncing with Supabase auth state.  
+- All Supabase RLS policies must be respected and tested.  
+- TypeScript types shared between backend and frontend, consistent with schema.  
+- Ensure all frontend components consume updated API endpoints correctly.  
+- Graceful error handling and fallback for AI calls.  
+- Performance optimizations: lazy loading, pagination for history, caching if needed.  
+
+**Supabase Schema & RLS:**  
+(Use the exact schema and RLS policies previously provided.)  
+
+Deliver a fully functioning app with all above features, perfectly integrated with the recreated Supabase backend, ready to deploy on Replit.  
+
+---
+
+Build in modular phases:  
+- Phase 1: Supabase integration + authentication + DB migration  
+- Phase 2: Quiz and flashcard backend + frontend  
+- Phase 3: Enhanced mindmap visualization + AI chatbot improvements  
+- Phase 4: Collaboration sessions  
+- Phase 5: Gamification expansion + polishing  
+
+Provide clear code and instructions for each phase.  
+
+---
+
+Do not remove existing working features. Extend and integrate. Prioritize stability and seamless user experience across features.  
