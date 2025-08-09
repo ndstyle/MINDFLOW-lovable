@@ -1,0 +1,150 @@
+ou are building the full MVP for an AI-powered visual learning webapp (new name TBD, currently called "Mindflow"). This app:
+
+Takes text or voice input (messy notes/thoughts).
+
+Generates interactive, visually appealing mindmaps using AI (OpenAI GPT-4o-mini).
+
+Allows chatting with an AI assistant to edit the mindmap (add/remove/restructure nodes).
+
+Depending on the user’s initial purpose (study, teach, project, brainstorm, presentation), also generates quizzes, flashcards, or study aids.
+
+Includes gamification (XP, levels, unlockable themes/features).
+
+Provides a dashboard, history view, and profile view.
+
+Supports collaboration (shared mindmaps via session token).
+
+Tech Stack
+Frontend: React 18 + TypeScript + Vite, Tailwind CSS, shadcn/ui, React Router.
+
+Backend: Node.js + Express.js.
+
+Database & Auth: Supabase (PostgreSQL) — use email/password auth (no magic link).
+
+AI: OpenAI GPT-4o-mini.
+
+Build both frontend and backend to run locally (Express API + React served in dev mode).
+
+Frontend Requirements
+Pages:
+
+/ Landing page – Hero, features showcase, quick start mindmap creation.
+
+/auth – Email/password login + signup.
+
+/create – Voice/text input, category selection, AI mindmap generation, export/share.
+
+/dashboard – Profile info, XP, level, achievements, recent maps.
+
+/history – Searchable/filterable mindmap library.
+
+Components:
+
+MindMapVisualization.tsx – Interactive SVG mindmap:
+
+Drag-and-drop nodes.
+
+Zoom/pan.
+
+Manual node add/remove/edit.
+
+Cool visual styles (smooth curves, animations, colors based on node type).
+
+SidePanelChat.tsx – Chat with AI to modify the map.
+
+VoiceInput.tsx – Voice-to-text input (Web Speech API).
+
+XPDisplay.tsx – XP + progress bar + unlockable modal.
+
+QuizView.tsx – Quiz generated from a mindmap (multiple-choice + feedback).
+
+FlashcardView.tsx – Flashcard mode with flip animations.
+
+Gamification:
+
+XP per completed quiz, flashcard session, or mindmap creation.
+
+Unlockable themes + features (themes change mindmap appearance).
+
+Collaboration:
+
+Join via session token (read/write access).
+
+Backend Requirements
+Endpoints:
+
+/auth/signup, /auth/login – Supabase integration for email/password auth.
+
+/mindmaps – CRUD operations, AI generation endpoint.
+
+/xp – Award/spend XP.
+
+/unlockables – List, unlock feature.
+
+/quiz – Generate quiz from mindmap nodes.
+
+/flashcards – Generate flashcards from mindmap nodes.
+
+/collab – Create/join collab sessions.
+
+AI Integration:
+
+Use GPT-4o-mini with category-specific prompts.
+
+Return structured JSON for mindmaps.
+
+AI quiz/flashcard generation based on map nodes.
+
+Supabase Integration:
+
+Use provided schema and RLS policies (below) to match frontend expectations.
+
+Assume Supabase project already has these SQL scripts executed.
+
+Use Supabase JS client for all DB interactions.
+
+Supabase Schema (reference for backend integration)
+Tables:
+
+profiles (user metadata, XP, level)
+
+mindmaps (owner_id, title, intent, content JSON)
+
+xp_transactions (history of XP changes)
+
+unlockables + user_unlockables (themes/features)
+
+quizzes (mindmap_id, questions JSON)
+
+flashcards (mindmap_id, cards JSON)
+
+collab_sessions (mindmap_id, session_token)
+
+Auth:
+
+Email/password auth only (no magic links).
+
+On signup, insert into profiles with username = email prefix.
+
+RLS Policies:
+
+Profiles, mindmaps, XP, unlockables restricted to owner or authorized session.
+
+Mindmap sharing via collab_sessions token.
+
+Quizzes/flashcards only accessible to owner.
+
+Other Requirements
+Testing: Ensure all CRUD + AI endpoints work with Supabase data.
+
+Error Handling: Graceful fallback for AI/API failures.
+
+Performance: Lazy load heavy components, paginate history view.
+
+UX: Make mindmaps visually stunning — animations, smooth zoom/pan, node colors based on type.
+
+Code Quality: TypeScript types shared between frontend/backend.
+
+Deliverable:
+
+Fully working React + Express app, connected to Supabase (schema above), with all pages, endpoints, and AI integrations functional.
