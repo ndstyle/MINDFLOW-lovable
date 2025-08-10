@@ -1,0 +1,59 @@
+Fix all outstanding issues and complete the MVP for Mindflow.
+
+Current critical problems:
+- /dashboard, /history, and /create pages get stuck on loading after login.
+- Sign-out button does not work (session not cleared, UI not updated).
+- Possible missing or broken auth/session handling across routes.
+- Incomplete or unreliable edge case handling in main app flows.
+
+Required stack integration:
+- Supabase is the ONLY backend/auth provider.
+- Existing Supabase schema must be respected exactly (do not alter or drop tables).
+- All authenticated calls must use the Supabase session/user UUID.
+- Do not modify landing page, marketing UI, or unrelated styles/features.
+
+Tasks:
+1. **Audit & Fix Auth Handling**
+   - Ensure single Supabase client instance is used everywhere.
+   - Fix global session management (React context or equivalent) using `supabase.auth.onAuthStateChange`.
+   - Make `/dashboard`, `/history`, `/create` only wait for session once, with proper loading & error handling.
+   - Implement **working sign-out** using `supabase.auth.signOut()` and force UI/state refresh.
+
+2. **Fix Page Loading Issues**
+   - Identify why these three pages hang (e.g., `getSession()` never resolves, data fetch never completes, or route guards misconfigured).
+   - Ensure all data fetching:
+     - Waits for session only once.
+     - Times out or fails gracefully.
+     - Shows fallback/error state instead of infinite spinner.
+
+3. **Secure API/Data Fetch Logic**
+   - All `/dashboard`, `/history`, `/create` data requests include proper Supabase auth context.
+   - Handle 401/403 by redirecting user to login or showing error message.
+
+4. **Routing Improvements**
+   - Auth guard protected routes — redirect if not logged in.
+   - Verify navigation works on all three pages.
+   - Ensure history navigation and React Router hooks (`useNavigate`) are properly imported/configured.
+
+5. **Full Edge Case Coverage**
+   - Duplicate usernames rejected cleanly.
+   - Network failures show fallback, not spinner.
+   - Expired sessions handled (user prompted to log in again).
+
+Output:
+- List of files changed (ONLY those relevant to auth/session/pages/data fetching/routing; leave unrelated features untouched).
+- Before/after code diffs for each file.
+- One-paragraph summary of root causes and how they were fixed.
+- Manual QA checklist:
+   1. Sign up → auto profile creation in Supabase matches auth UUID.
+   2. Login → navigate to `/dashboard`, `/history`, `/create` → all load.
+   3. Sign-out → return to guest/landing UI, session cleared.
+   4. Simulate API failure → pages still respond with error UI, not infinite load.
+   5. Duplicate username → handled with clear error.
+   6. Expired/invalid session → redirected to login.
+- Suggested commit message.
+
+Constraints:
+- Keep changes minimal and targeted.
+- All fixes must pass TypeScript compilation and existing tests.
+- Do not break existing working features outside target scope.

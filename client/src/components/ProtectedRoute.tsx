@@ -12,10 +12,12 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   useEffect(() => {
     if (!loading && !user) {
+      console.log('ProtectedRoute: No user, redirecting to auth');
       setLocation('/auth');
     }
   }, [user, loading, setLocation]);
 
+  // Show loading state
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -27,8 +29,15 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     );
   }
 
+  // If not loading and no user, show redirect message
   if (!user) {
-    return null; // Will redirect to auth
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-muted-foreground">Redirecting to login...</p>
+        </div>
+      </div>
+    );
   }
 
   return <>{children}</>;

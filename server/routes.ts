@@ -300,6 +300,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.delete('/api/mindmaps/:id', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+
+      const { data: mindmap, error } = await supabase
+        .from('mindmaps')
+        .delete()
+        .eq('id', id)
+        .eq('owner_id', req.user!.id) // Ensure user can only delete their own mindmaps
+        .single();
+
+      if (error) {
+        return res.status(500).json({ error: error.message });
+      }
+
+      res.json({ message: 'Mindmap deleted successfully' });
+    } catch (error) {
+      console.error('Delete mindmap error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
   // XP and unlockables routes
   app.get('/api/unlockables', async (req, res) => {
     try {

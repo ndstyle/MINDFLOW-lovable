@@ -24,38 +24,61 @@ const Dashboard = () => {
 
   useEffect(() => {
     if (!loading && !user) {
+      console.log('Dashboard: No user, redirecting to auth');
       setLocation("/auth");
       return;
     }
     
-    if (user) {
+    if (user && !loading) {
       fetchMindmaps();
     }
   }, [user, loading, setLocation]);
 
   const fetchMindmaps = async () => {
     try {
+      setLoadingMindmaps(true);
+      
       // Get auth token from Supabase
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) {
-        throw new Error('No authentication token');
+        console.warn('No auth token available');
+        setMindmaps([]);
+        return;
       }
+
+      // Add timeout to API call
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
 
       const response = await fetch('/api/mindmaps?limit=6', {
         headers: {
           'Authorization': `Bearer ${session.access_token}`
-        }
+        },
+        signal: controller.signal
       });
+      
+      clearTimeout(timeoutId);
       
       if (response.ok) {
         const data = await response.json();
-        setMindmaps(data);
+        setMindmaps(Array.isArray(data) ? data : []);
+      } else if (response.status === 401) {
+        console.warn('Authentication failed, redirecting to login');
+        setLocation('/auth');
+      } else {
+        console.error('API error:', response.status, response.statusText);
+        setMindmaps([]);
+        toast.error("failed to load mind maps");
+      }
+    } catch (error: any) {
+      console.error('Error fetching mindmaps:', error);
+      setMindmaps([]);
+      
+      if (error.name === 'AbortError') {
+        toast.error("request timed out");
       } else {
         toast.error("failed to load mind maps");
       }
-    } catch (error) {
-      console.error('Error fetching mindmaps:', error);
-      toast.error("failed to load mind maps");
     } finally {
       setLoadingMindmaps(false);
     }

@@ -16,8 +16,10 @@ const Header = () => {
     try {
       await signOut();
       toast.success("signed out successfully");
-      setLocation("/auth");
+      // Force navigation to home page after signout
+      setLocation("/");
     } catch (error: any) {
+      console.error('Header signout error:', error);
       toast.error("error signing out");
     }
   };

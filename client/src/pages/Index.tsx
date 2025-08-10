@@ -97,7 +97,7 @@ const Index = () => {
         if (mindmapResponse.ok) {
           const mindmap = await mindmapResponse.json();
           setCurrentMindmapId(mindmap.id);
-          await awardXP(10, 'Created a mind map', mindmap.id);
+          await awardXP(10, 'Created a mind map');
         }
       } catch (dbError) {
         console.error('Error saving mindmap:', dbError);

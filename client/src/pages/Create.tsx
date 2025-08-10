@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
+import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
@@ -10,11 +11,30 @@ import { default as Header } from '@/components/Header';
 import { supabase } from '@/lib/supabase';
 
 export default function Create() {
+  const { user, loading } = useAuth();
   const [, setLocation] = useLocation();
   const [text, setText] = useState('');
   const [intent, setIntent] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (!loading && !user) {
+      console.log('Create: No user, redirecting to auth');
+      setLocation('/auth');
+    }
+  }, [user, loading, setLocation]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   const handleGenerate = async () => {
     if (!text.trim()) {
