@@ -9,7 +9,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
-// Database types based on the provided schema
+// Database types based on your exact schema
 export interface Database {
   public: {
     Tables: {
@@ -42,27 +42,27 @@ export interface Database {
       mindmaps: {
         Row: {
           id: string
-          owner_id: string
+          owner_id: string | null
           title: string
-          intent: 'study' | 'teach' | 'project' | 'brainstorm' | 'presentation'
+          intent: string | null
           content: any
           created_at: string
           updated_at: string
         }
         Insert: {
           id?: string
-          owner_id: string
+          owner_id?: string | null
           title: string
-          intent: 'study' | 'teach' | 'project' | 'brainstorm' | 'presentation'
+          intent?: string | null
           content: any
           created_at?: string
           updated_at?: string
         }
         Update: {
           id?: string
-          owner_id?: string
+          owner_id?: string | null
           title?: string
-          intent?: 'study' | 'teach' | 'project' | 'brainstorm' | 'presentation'
+          intent?: string | null
           content?: any
           created_at?: string
           updated_at?: string
@@ -72,60 +72,60 @@ export interface Database {
         Row: {
           id: string
           name: string
-          type: 'theme' | 'feature'
+          type: string | null
           cost: number
         }
         Insert: {
           id?: string
           name: string
-          type: 'theme' | 'feature'
+          type?: string | null
           cost: number
         }
         Update: {
           id?: string
           name?: string
-          type?: 'theme' | 'feature'
+          type?: string | null
           cost?: number
         }
       }
       user_unlockables: {
         Row: {
           id: string
-          profile_id: string
-          unlockable_id: string
+          profile_id: string | null
+          unlockable_id: string | null
           unlocked_at: string
         }
         Insert: {
           id?: string
-          profile_id: string
-          unlockable_id: string
+          profile_id?: string | null
+          unlockable_id?: string | null
           unlocked_at?: string
         }
         Update: {
           id?: string
-          profile_id?: string
-          unlockable_id?: string
+          profile_id?: string | null
+          unlockable_id?: string | null
           unlocked_at?: string
         }
       }
       xp_transactions: {
         Row: {
           id: string
-          profile_id: string
+          profile_id: string | null
           amount: number
           reason: string
           created_at: string
         }
         Insert: {
           id?: string
-          profile_id: string
+          profile_id?: string | null
           amount: number
           reason: string
           created_at?: string
         }
         Update: {
           id?: string
-          profile_id?: string
+          profile_id?: string | null
           amount?: number
           reason?: string
           created_at?: string
@@ -134,19 +134,19 @@ export interface Database {
       quizzes: {
         Row: {
           id: string
-          mindmap_id: string
+          mindmap_id: string | null
           questions: any
           created_at: string
         }
         Insert: {
           id?: string
-          mindmap_id: string
+          mindmap_id?: string | null
           questions: any
           created_at?: string
         }
         Update: {
           id?: string
-          mindmap_id?: string
+          mindmap_id?: string | null
           questions?: any
           created_at?: string
         }
@@ -154,19 +154,19 @@ export interface Database {
       flashcards: {
         Row: {
           id: string
-          mindmap_id: string
+          mindmap_id: string | null
           cards: any
           created_at: string
         }
         Insert: {
           id?: string
-          mindmap_id: string
+          mindmap_id?: string | null
           cards: any
           created_at?: string
         }
         Update: {
           id?: string
-          mindmap_id?: string
+          mindmap_id?: string | null
           cards?: any
           created_at?: string
         }
@@ -174,19 +174,19 @@ export interface Database {
       collab_sessions: {
         Row: {
           id: string
-          mindmap_id: string
+          mindmap_id: string | null
           session_token: string
           created_at: string
         }
         Insert: {
           id?: string
-          mindmap_id: string
+          mindmap_id?: string | null
           session_token: string
           created_at?: string
         }
         Update: {
           id?: string
-          mindmap_id?: string
+          mindmap_id?: string | null
           session_token?: string
           created_at?: string
         }

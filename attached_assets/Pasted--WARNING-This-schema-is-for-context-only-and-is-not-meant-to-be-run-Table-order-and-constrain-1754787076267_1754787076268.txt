@@ -1,0 +1,73 @@
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
+
+CREATE TABLE public.collab_sessions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  mindmap_id uuid,
+  session_token text NOT NULL UNIQUE,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT collab_sessions_pkey PRIMARY KEY (id),
+  CONSTRAINT collab_sessions_mindmap_id_fkey FOREIGN KEY (mindmap_id) REFERENCES public.mindmaps(id)
+);
+CREATE TABLE public.flashcards (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  mindmap_id uuid,
+  cards jsonb NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT flashcards_pkey PRIMARY KEY (id),
+  CONSTRAINT flashcards_mindmap_id_fkey FOREIGN KEY (mindmap_id) REFERENCES public.mindmaps(id)
+);
+CREATE TABLE public.mindmaps (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  owner_id uuid,
+  title text NOT NULL,
+  intent text CHECK (intent = ANY (ARRAY['study'::text, 'teach'::text, 'project'::text, 'brainstorm'::text, 'presentation'::text])),
+  content jsonb NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT mindmaps_pkey PRIMARY KEY (id),
+  CONSTRAINT mindmaps_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.profiles (
+  id uuid NOT NULL,
+  username text NOT NULL UNIQUE,
+  xp integer DEFAULT 0,
+  level integer DEFAULT 1,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT profiles_pkey PRIMARY KEY (id),
+  CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.quizzes (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  mindmap_id uuid,
+  questions jsonb NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT quizzes_pkey PRIMARY KEY (id),
+  CONSTRAINT quizzes_mindmap_id_fkey FOREIGN KEY (mindmap_id) REFERENCES public.mindmaps(id)
+);
+CREATE TABLE public.unlockables (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  name text NOT NULL UNIQUE,
+  type text CHECK (type = ANY (ARRAY['theme'::text, 'feature'::text])),
+  cost integer NOT NULL,
+  CONSTRAINT unlockables_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.user_unlockables (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  profile_id uuid,
+  unlockable_id uuid,
+  unlocked_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT user_unlockables_pkey PRIMARY KEY (id),
+  CONSTRAINT user_unlockables_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.profiles(id),
+  CONSTRAINT user_unlockables_unlockable_id_fkey FOREIGN KEY (unlockable_id) REFERENCES public.unlockables(id)
+);
+CREATE TABLE public.xp_transactions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  profile_id uuid,
+  amount integer NOT NULL,
+  reason text NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT xp_transactions_pkey PRIMARY KEY (id),
+  CONSTRAINT xp_transactions_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.profiles(id)
+);
