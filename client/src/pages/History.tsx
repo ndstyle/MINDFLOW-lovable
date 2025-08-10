@@ -1,4 +1,4 @@
-import Header from "@/components/Header";
+import { default as Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { Search, Filter, Clock, Trash2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,6 +7,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
+import { supabase } from "@/lib/supabase";
 
 interface MindMap {
   id: string;
@@ -38,7 +39,18 @@ const History = () => {
 
   const fetchMindmaps = async () => {
     try {
-      const response = await fetch('/api/mindmaps');
+      // Get auth token from Supabase
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('No authentication token');
+      }
+
+      const response = await fetch('/api/mindmaps', {
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      });
+      
       if (response.ok) {
         const data = await response.json();
         setMindmaps(data);
@@ -55,8 +67,17 @@ const History = () => {
 
   const deleteMindMap = async (id: string) => {
     try {
+      // Get auth token from Supabase
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('No authentication token');
+      }
+
       const response = await fetch(`/api/mindmaps/${id}`, {
         method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`
+        }
       });
 
       if (response.ok) {
@@ -140,7 +161,7 @@ const History = () => {
               <p className="text-muted-foreground lowercase">
                 {searchTerm || selectedCategory !== "all" ? "no mind maps match your search" : "no mind maps yet"}
               </p>
-              <Button onClick={() => navigate("/")} className="lowercase">
+              <Button onClick={() => setLocation("/")} className="lowercase">
                 create your first mind map
               </Button>
             </div>

@@ -1,4 +1,4 @@
-import Header from "@/components/Header";
+import { default as Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { Plus, FileText, Calendar, Trash2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useLocation, Link } from "wouter";
 import { toast } from "sonner";
+import { supabase } from "@/lib/supabase";
 
 interface MindMap {
   id: string;
@@ -34,7 +35,18 @@ const Dashboard = () => {
 
   const fetchMindmaps = async () => {
     try {
-      const response = await fetch('/api/mindmaps?limit=6');
+      // Get auth token from Supabase
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('No authentication token');
+      }
+
+      const response = await fetch('/api/mindmaps?limit=6', {
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      });
+      
       if (response.ok) {
         const data = await response.json();
         setMindmaps(data);
@@ -51,8 +63,17 @@ const Dashboard = () => {
 
   const deleteMindMap = async (id: string) => {
     try {
+      // Get auth token from Supabase
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('No authentication token');
+      }
+
       const response = await fetch(`/api/mindmaps/${id}`, {
         method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`
+        }
       });
 
       if (response.ok) {
