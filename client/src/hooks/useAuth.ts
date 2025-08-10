@@ -1,7 +1,9 @@
-import { useState, useEffect, createContext, useContext } from 'react';
-import { toast } from 'sonner';
 
-interface User {
+import { useState, useEffect } from 'react';
+import { supabase, getSessionToken } from '../lib/supabase';
+import type { User } from '@supabase/supabase-js';
+
+interface AuthUser {
   id: string;
   email: string;
 }
@@ -9,151 +11,149 @@ interface User {
 interface Profile {
   id: string;
   user_id: string;
-  username: string;
-  email: string;
+  username: string | null;
+  email: string | null;
   xp: number;
   level: number;
+  created_at: string;
+  updated_at: string;
 }
-
-interface AuthContextType {
-  user: User | null;
-  profile: Profile | null;
-  loading: boolean;
-  signUp: (email: string, password: string, username?: string) => Promise<void>;
-  signIn: (email: string, password: string) => Promise<void>;
-  signOut: () => Promise<void>;
-  refreshProfile: () => Promise<void>;
-}
-
-export const AuthContext = createContext<AuthContextType | null>(null);
 
 export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-};
-
-export const useAuthHook = () => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const getAuthHeaders = () => {
-    const token = localStorage.getItem('mindflow_token');
-    return token ? { 'Authorization': `Bearer ${token}` } : {};
-  };
+  useEffect(() => {
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setUser({
+          id: session.user.id,
+          email: session.user.email!
+        });
+        fetchProfile(session.user.id);
+      } else {
+        setLoading(false);
+      }
+    });
 
-  const refreshProfile = async () => {
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        setUser({
+          id: session.user.id,
+          email: session.user.email!
+        });
+        await fetchProfile(session.user.id);
+      } else {
+        setUser(null);
+        setProfile(null);
+        setLoading(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const fetchProfile = async (userId: string) => {
     try {
-      const response = await fetch('/api/auth/session', {
-        headers: getAuthHeaders()
+      const token = await getSessionToken();
+      if (!token) return;
+
+      const response = await fetch('/api/profile', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
       });
 
       if (response.ok) {
-        const data = await response.json();
-        setUser(data.user);
-        setProfile(data.profile);
-      } else {
-        // Token invalid, clear local storage
-        localStorage.removeItem('mindflow_token');
-        setUser(null);
-        setProfile(null);
+        const profileData = await response.json();
+        setProfile(profileData);
       }
     } catch (error) {
-      console.error('Error refreshing profile:', error);
-      localStorage.removeItem('mindflow_token');
-      setUser(null);
-      setProfile(null);
+      console.error('Error fetching profile:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
   const signUp = async (email: string, password: string, username?: string) => {
     try {
-      const response = await fetch('/api/auth/signup', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ email, password, username })
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            username: username || null
+          }
+        }
       });
 
-      const data = await response.json();
+      if (error) throw error;
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Signup failed');
+      // If user is created, make API call to create profile
+      if (data.user) {
+        const response = await fetch('/api/auth/signup', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ email, password, username })
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Signup failed');
+        }
+
+        const result = await response.json();
+        setUser(result.user);
+        setProfile(result.profile);
       }
 
-      // Store token and set user data
-      localStorage.setItem('mindflow_token', data.session.access_token);
-      setUser(data.user);
-      setProfile(data.profile);
-      
-      toast.success('Account created successfully!');
-    } catch (error: any) {
+      return { user: data.user, error: null };
+    } catch (error) {
       console.error('Signup error:', error);
-      toast.error(error.message || 'Failed to create account');
-      throw error;
+      return { user: null, error: error as Error };
     }
   };
 
   const signIn = async (email: string, password: string) => {
     try {
-      const response = await fetch('/api/auth/signin', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ email, password })
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
       });
 
-      const data = await response.json();
+      if (error) throw error;
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Sign in failed');
+      if (data.user) {
+        setUser({
+          id: data.user.id,
+          email: data.user.email!
+        });
+        await fetchProfile(data.user.id);
       }
 
-      // Store token and set user data
-      localStorage.setItem('mindflow_token', data.session.access_token);
-      setUser(data.user);
-      setProfile(data.profile);
-      
-      toast.success('Signed in successfully!');
-    } catch (error: any) {
-      console.error('Sign in error:', error);
-      toast.error(error.message || 'Failed to sign in');
-      throw error;
+      return { user: data.user, error: null };
+    } catch (error) {
+      console.error('Signin error:', error);
+      return { user: null, error: error as Error };
     }
   };
 
   const signOut = async () => {
     try {
-      await fetch('/api/auth/signout', {
-        method: 'POST',
-        headers: getAuthHeaders()
-      });
-    } catch (error) {
-      console.error('Sign out error:', error);
-    } finally {
-      localStorage.removeItem('mindflow_token');
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+
       setUser(null);
       setProfile(null);
-      toast.success('Signed out successfully');
+    } catch (error) {
+      console.error('Signout error:', error);
     }
   };
-
-  useEffect(() => {
-    const initAuth = async () => {
-      const token = localStorage.getItem('mindflow_token');
-      if (token) {
-        await refreshProfile();
-      }
-      setLoading(false);
-    };
-
-    initAuth();
-  }, []);
 
   return {
     user,
@@ -162,6 +162,6 @@ export const useAuthHook = () => {
     signUp,
     signIn,
     signOut,
-    refreshProfile
+    refreshProfile: () => user ? fetchProfile(user.id) : Promise.resolve()
   };
 };

@@ -1,24 +1,11 @@
-import express from "express";
-import bcrypt from "bcrypt";
-import { storage } from "./storage";
+import express from 'express';
 import { supabaseAdmin } from './supabase';
+import { storage } from './storage';
 import type { InsertProfile, InsertMindmap, InsertXpTransaction, InsertUserUnlockable } from '@shared/supabase-types';
-
-// Extend Express Request to include user property
-declare global {
-  namespace Express {
-    interface Request {
-      user?: {
-        id: string;
-        email: string;
-      };
-    }
-  }
-}
 
 const router = express.Router();
 
-// Middleware to authenticate requests using simple tokens
+// Middleware to require authentication
 const requireAuth = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   try {
     const authHeader = req.headers.authorization;
@@ -27,31 +14,16 @@ const requireAuth = async (req: express.Request, res: express.Response, next: ex
     }
 
     const token = authHeader.substring(7);
-    
-    // Decode our simple session token
-    try {
-      const decoded = JSON.parse(Buffer.from(token, 'base64').toString());
-      
-      if (!decoded.userId || !decoded.exp || Date.now() > decoded.exp) {
-        return res.status(401).json({ error: 'Invalid or expired token' });
-      }
 
-      // Verify user exists
-      const { data: user, error } = await supabaseAdmin
-        .from('users')
-        .select('id, email')
-        .eq('id', decoded.userId)
-        .single();
+    // Use Supabase to verify the JWT token
+    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
 
-      if (error || !user) {
-        return res.status(401).json({ error: 'User not found' });
-      }
-
-      req.user = { id: user.id, email: user.email };
-      next();
-    } catch (decodeError) {
-      return res.status(401).json({ error: 'Invalid token format' });
+    if (error || !user) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
     }
+
+    req.user = { id: user.id, email: user.email! };
+    next();
   } catch (error) {
     console.error('Auth middleware error:', error);
     res.status(401).json({ error: 'Authentication failed' });
@@ -65,7 +37,7 @@ const optionalAuth = async (req: express.Request, res: express.Response, next: e
     if (authHeader?.startsWith('Bearer ')) {
       const token = authHeader.substring(7);
       const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
-      
+
       if (!error && user) {
         req.user = { id: user.id, email: user.email! };
       }
@@ -86,39 +58,27 @@ router.post('/auth/signup', async (req, res) => {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    // Check if user already exists
-    const { data: existingUser } = await supabaseAdmin
-      .from('users')
-      .select('id')
-      .eq('email', email)
-      .single();
+    // Create user with Supabase Auth
+    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true
+    });
 
-    if (existingUser) {
-      return res.status(400).json({ error: 'User already exists' });
+    if (authError) {
+      return res.status(400).json({ error: authError.message });
     }
 
-    // Hash password
-    const passwordHash = await bcrypt.hash(password, 10);
-
-    // Create user
-    const { data: user, error: userError } = await supabaseAdmin
-      .from('users')
-      .insert({
-        email,
-        password_hash: passwordHash
-      })
-      .select()
-      .single();
-
-    if (userError) {
-      return res.status(400).json({ error: userError.message });
+    const user = authData.user;
+    if (!user) {
+      return res.status(400).json({ error: 'Failed to create user' });
     }
 
     // Create profile
     const profileData: InsertProfile = {
       user_id: user.id,
-      username: username || email.split('@')[0],
-      email,
+      email: user.email!,
+      username: username || null,
       xp: 0,
       level: 1
     };
@@ -126,21 +86,26 @@ router.post('/auth/signup', async (req, res) => {
     const profile = await storage.createProfile(profileData);
 
     // Generate session token
-    const sessionToken = Buffer.from(JSON.stringify({
-      userId: user.id,
-      email: user.email,
-      exp: Date.now() + (7 * 24 * 60 * 60 * 1000) // 7 days
-    })).toString('base64');
-    
-    res.status(201).json({ 
-      user: { id: user.id, email: user.email },
+    const { data: { session }, error: sessionError } = await supabaseAdmin.auth.admin.generateLink({
+      type: 'magiclink',
+      email: user.email!
+    });
+
+    if (sessionError) {
+      return res.status(400).json({ error: 'Failed to create session' });
+    }
+
+    res.json({
+      user: {
+        id: user.id,
+        email: user.email
+      },
       profile,
-      session: { access_token: sessionToken },
-      message: 'User created successfully' 
+      token: session?.access_token
     });
   } catch (error) {
     console.error('Signup error:', error);
-    res.status(500).json({ error: 'Failed to create user' });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -152,60 +117,54 @@ router.post('/auth/signin', async (req, res) => {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    // Get user from database
-    const { data: user, error } = await supabaseAdmin
-      .from('users')
-      .select('*')
-      .eq('email', email)
-      .single();
+    // Sign in with Supabase Auth
+    const { data, error } = await supabaseAdmin.auth.signInWithPassword({
+      email,
+      password
+    });
 
-    if (error || !user) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+    if (error) {
+      return res.status(400).json({ error: error.message });
     }
 
-    // Verify password
-    const isValid = await bcrypt.compare(password, user.password_hash);
-    if (!isValid) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+    const user = data.user;
+    if (!user) {
+      return res.status(400).json({ error: 'Authentication failed' });
     }
 
-    // Get user profile
+    // Get profile
     const profile = await storage.getProfile(user.id);
-
-    // Generate session token
-    const sessionToken = Buffer.from(JSON.stringify({
-      userId: user.id,
-      email: user.email,
-      exp: Date.now() + (7 * 24 * 60 * 60 * 1000) // 7 days
-    })).toString('base64');
+    if (!profile) {
+      return res.status(404).json({ error: 'Profile not found' });
+    }
 
     res.json({
-      user: { id: user.id, email: user.email },
+      user: {
+        id: user.id,
+        email: user.email
+      },
       profile,
-      session: { access_token: sessionToken },
-      message: 'Signed in successfully'
+      token: data.session.access_token
     });
   } catch (error) {
     console.error('Signin error:', error);
-    res.status(500).json({ error: 'Failed to sign in' });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-router.post('/auth/signout', (req, res) => {
-  // Since we're using stateless tokens, signout is handled client-side
-  res.json({ message: 'Signed out successfully' });
-});
-
-router.get('/auth/session', requireAuth, async (req, res) => {
+router.post('/auth/signout', requireAuth, async (req, res) => {
   try {
-    const profile = await storage.getProfile(req.user!.id);
-    res.json({
-      user: req.user,
-      profile
-    });
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.substring(7);
+
+    if (token) {
+      await supabaseAdmin.auth.admin.signOut(token);
+    }
+
+    res.json({ message: 'Signed out successfully' });
   } catch (error) {
-    console.error('Session error:', error);
-    res.status(500).json({ error: 'Failed to get session' });
+    console.error('Signout error:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -213,11 +172,9 @@ router.get('/auth/session', requireAuth, async (req, res) => {
 router.get('/profile', requireAuth, async (req, res) => {
   try {
     const profile = await storage.getProfile(req.user!.id);
-    
     if (!profile) {
       return res.status(404).json({ error: 'Profile not found' });
     }
-    
     res.json(profile);
   } catch (error) {
     console.error('Get profile error:', error);
@@ -225,10 +182,10 @@ router.get('/profile', requireAuth, async (req, res) => {
   }
 });
 
-router.patch('/profile', requireAuth, async (req, res) => {
+router.put('/profile', requireAuth, async (req, res) => {
   try {
-    const updates = req.body;
-    const profile = await storage.updateProfile(req.user!.id, updates);
+    const { username } = req.body;
+    const profile = await storage.updateProfile(req.user!.id, { username });
     res.json(profile);
   } catch (error) {
     console.error('Update profile error:', error);
@@ -251,11 +208,9 @@ router.get('/mindmaps', requireAuth, async (req, res) => {
 router.get('/mindmaps/:id', requireAuth, async (req, res) => {
   try {
     const mindmap = await storage.getMindmap(req.params.id, req.user!.id);
-    
     if (!mindmap) {
       return res.status(404).json({ error: 'Mindmap not found' });
     }
-    
     res.json(mindmap);
   } catch (error) {
     console.error('Get mindmap error:', error);
@@ -265,63 +220,56 @@ router.get('/mindmaps/:id', requireAuth, async (req, res) => {
 
 router.post('/mindmaps', requireAuth, async (req, res) => {
   try {
+    const { title, content, category } = req.body;
+
+    const xpEarned = 10; // Base XP for creating a mindmap
+
     const mindmapData: InsertMindmap = {
-      ...req.body,
-      user_id: req.user!.id
-    };
-    
-    const mindmap = await storage.createMindmap(mindmapData);
-    
-    // Award XP for creating mindmap
-    await storage.createXpTransaction({
       user_id: req.user!.id,
-      amount: mindmap.xp_earned,
+      title,
+      content,
+      category: category || null,
+      xp_earned: xpEarned
+    };
+
+    const mindmap = await storage.createMindmap(mindmapData);
+
+    // Award XP
+    const xpTransaction: InsertXpTransaction = {
+      user_id: req.user!.id,
+      amount: xpEarned,
       type: 'earned',
       reason: 'Created mindmap',
       mindmap_id: mindmap.id
-    });
-    
-    // Update profile XP
+    };
+
+    await storage.createXpTransaction(xpTransaction);
+
+    // Update profile XP and level
     const profile = await storage.getProfile(req.user!.id);
     if (profile) {
-      const newXp = profile.xp + mindmap.xp_earned;
-      const newLevel = Math.floor(newXp / 100) + 1;
-      await storage.updateProfile(req.user!.id, { 
-        xp: newXp, 
-        level: newLevel 
+      const newXp = profile.xp + xpEarned;
+      const newLevel = Math.floor(newXp / 100) + 1; // Level up every 100 XP
+
+      await storage.updateProfile(req.user!.id, {
+        xp: newXp,
+        level: newLevel
       });
     }
-    
-    res.status(201).json(mindmap);
+
+    res.json(mindmap);
   } catch (error) {
     console.error('Create mindmap error:', error);
     res.status(500).json({ error: 'Failed to create mindmap' });
   }
 });
 
-router.patch('/mindmaps/:id', requireAuth, async (req, res) => {
-  try {
-    const mindmap = await storage.updateMindmap(req.params.id, req.user!.id, req.body);
-    
-    if (!mindmap) {
-      return res.status(404).json({ error: 'Mindmap not found' });
-    }
-    
-    res.json(mindmap);
-  } catch (error) {
-    console.error('Update mindmap error:', error);
-    res.status(500).json({ error: 'Failed to update mindmap' });
-  }
-});
-
 router.delete('/mindmaps/:id', requireAuth, async (req, res) => {
   try {
-    const deleted = await storage.deleteMindmap(req.params.id, req.user!.id);
-    
-    if (!deleted) {
+    const success = await storage.deleteMindmap(req.params.id, req.user!.id);
+    if (!success) {
       return res.status(404).json({ error: 'Mindmap not found' });
     }
-    
     res.json({ message: 'Mindmap deleted successfully' });
   } catch (error) {
     console.error('Delete mindmap error:', error);
@@ -340,35 +288,8 @@ router.get('/xp-transactions', requireAuth, async (req, res) => {
   }
 });
 
-router.post('/xp-transactions', requireAuth, async (req, res) => {
-  try {
-    const transactionData: InsertXpTransaction = {
-      ...req.body,
-      user_id: req.user!.id
-    };
-    
-    const transaction = await storage.createXpTransaction(transactionData);
-    
-    // Update profile XP
-    const profile = await storage.getProfile(req.user!.id);
-    if (profile) {
-      const newXp = Math.max(0, profile.xp + transaction.amount);
-      const newLevel = Math.floor(newXp / 100) + 1;
-      await storage.updateProfile(req.user!.id, { 
-        xp: newXp, 
-        level: newLevel 
-      });
-    }
-    
-    res.status(201).json(transaction);
-  } catch (error) {
-    console.error('Create XP transaction error:', error);
-    res.status(500).json({ error: 'Failed to create XP transaction' });
-  }
-});
-
 // Unlockables routes
-router.get('/unlockables', optionalAuth, async (req, res) => {
+router.get('/unlockables', async (req, res) => {
   try {
     const unlockables = await storage.getUnlockables();
     res.json(unlockables);
@@ -388,576 +309,244 @@ router.get('/user-unlockables', requireAuth, async (req, res) => {
   }
 });
 
-router.post('/user-unlockables', requireAuth, async (req, res) => {
+router.post('/unlock', requireAuth, async (req, res) => {
   try {
+    const { unlockableId } = req.body;
+
+    // Get unlockable details
+    const unlockables = await storage.getUnlockables();
+    const unlockable = unlockables.find(u => u.id === unlockableId);
+
+    if (!unlockable) {
+      return res.status(404).json({ error: 'Unlockable not found' });
+    }
+
+    // Check if user has enough XP
+    const profile = await storage.getProfile(req.user!.id);
+    if (!profile || profile.xp < unlockable.xp_cost) {
+      return res.status(400).json({ error: 'Insufficient XP' });
+    }
+
+    // Check if already unlocked
+    const userUnlockables = await storage.getUserUnlockables(req.user!.id);
+    const alreadyUnlocked = userUnlockables.some(u => u.unlockable_id === unlockableId);
+
+    if (alreadyUnlocked) {
+      return res.status(400).json({ error: 'Already unlocked' });
+    }
+
+    // Create unlock record
     const userUnlockableData: InsertUserUnlockable = {
-      ...req.body,
-      user_id: req.user!.id
+      user_id: req.user!.id,
+      unlockable_id: unlockableId
     };
-    
+
     const userUnlockable = await storage.createUserUnlockable(userUnlockableData);
-    res.status(201).json(userUnlockable);
+
+    // Deduct XP
+    const xpTransaction: InsertXpTransaction = {
+      user_id: req.user!.id,
+      amount: -unlockable.xp_cost,
+      type: 'spent',
+      reason: `Unlocked ${unlockable.name}`
+    };
+
+    await storage.createXpTransaction(xpTransaction);
+
+    // Update profile XP
+    const newXp = profile.xp - unlockable.xp_cost;
+    const newLevel = Math.floor(newXp / 100) + 1;
+
+    await storage.updateProfile(req.user!.id, {
+      xp: newXp,
+      level: newLevel
+    });
+
+    res.json({ userUnlockable, newXp, newLevel });
   } catch (error) {
-    console.error('Create user unlockable error:', error);
-    res.status(500).json({ error: 'Failed to unlock item' });
+    console.error('Unlock error:', error);
+    res.status(500).json({ error: 'Failed to unlock feature' });
   }
 });
 
-// AI-powered routes
-router.post('/generate-mindmap', requireAuth, async (req, res) => {
+// AI routes
+router.post('/generate-mindmap', optionalAuth, async (req, res) => {
   try {
-    const { text, category } = req.body;
+    const { input, category } = req.body;
 
-    if (!text || !category) {
-      return res.status(400).json({ error: 'Text and category are required' });
+    if (!input) {
+      return res.status(400).json({ error: 'Input is required' });
     }
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          {
-            role: 'system',
-            content: `You are an expert mind map generator. Create a structured mind map from the given text with the category context: ${category}.
-            
-Return a JSON object with a "nodes" array. Each node should have:
-- id: unique identifier
-- text: the text content  
-- x: x position (use logical spacing)
-- y: y position (use logical spacing)
-- level: hierarchy level (0 for central, 1+ for branches)
-- children: array of child node IDs
+    // Import OpenAI here to avoid loading it unless needed
+    const { OpenAI } = await import('openai');
 
-Create a well-structured, visually logical mind map that captures the key concepts and relationships.`
-          },
-          {
-            role: 'user',
-            content: text
-          }
-        ],
-        temperature: 0.7,
-        max_tokens: 2000,
-      }),
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error('OpenAI API key not configured');
+    }
+
+    const openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
     });
 
-    if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.status}`);
+    const categoryPrompts = {
+      notes: "Convert these notes into a clear, hierarchical mind map structure",
+      project: "Organize this project idea into a structured mind map with phases and tasks",
+      app: "Structure this app concept into a development-focused mind map",
+      brainstorming: "Expand and organize these brainstorming ideas into a creative mind map",
+      learning: "Create a learning-focused mind map that breaks down this topic",
+      default: "Convert this input into a well-organized mind map structure"
+    };
+
+    const prompt = `${categoryPrompts[category as keyof typeof categoryPrompts] || categoryPrompts.default}:
+
+"${input}"
+
+Return a JSON object with this exact structure:
+{
+  "title": "Main topic title",
+  "children": [
+    {
+      "title": "Subtopic 1",
+      "children": [
+        {
+          "title": "Detail 1.1",
+          "children": []
+        },
+        {
+          "title": "Detail 1.2", 
+          "children": []
+        }
+      ]
+    },
+    {
+      "title": "Subtopic 2",
+      "children": [
+        {
+          "title": "Detail 2.1",
+          "children": []
+        }
+      ]
     }
+  ]
+}
 
-    const data = await response.json();
-    const content = data.choices[0]?.message?.content;
+Keep it focused and not too deep (max 3 levels). Return only valid JSON.`;
 
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content: "You are a mind map generation expert. Always return valid JSON in the exact format requested."
+        },
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      temperature: 0.7,
+      max_tokens: 1000,
+    });
+
+    const content = completion.choices[0]?.message?.content;
     if (!content) {
-      throw new Error('No content received from OpenAI');
+      throw new Error('No response from OpenAI');
     }
 
-    const mindMapData = JSON.parse(content);
-    res.json(mindMapData);
-    
+    try {
+      const mindMapData = JSON.parse(content);
+      res.json(mindMapData);
+    } catch (parseError) {
+      console.error('Failed to parse OpenAI response:', content);
+      // Return a fallback mind map
+      res.json({
+        title: input.slice(0, 50) + (input.length > 50 ? '...' : ''),
+        children: [
+          {
+            title: "Key Points",
+            children: [
+              { title: "Point 1", children: [] },
+              { title: "Point 2", children: [] }
+            ]
+          },
+          {
+            title: "Next Steps",
+            children: [
+              { title: "Action 1", children: [] },
+              { title: "Action 2", children: [] }
+            ]
+          }
+        ]
+      });
+    }
   } catch (error) {
     console.error('Generate mindmap error:', error);
     res.status(500).json({ error: 'Failed to generate mindmap' });
   }
 });
 
-router.post('/chat-assistant', requireAuth, async (req, res) => {
+router.post('/chat', requireAuth, async (req, res) => {
   try {
-    const { message, mindMapNodes, conversationHistory } = req.body;
+    const { message, mindmapData } = req.body;
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          {
-            role: 'system',
-            content: `You are a helpful AI assistant specialized in mind map editing. You can help users modify their mind maps by adding, removing, or restructuring nodes based on natural language requests.
+    if (!message) {
+      return res.status(400).json({ error: 'Message is required' });
+    }
 
-Current mind map structure: ${JSON.stringify(mindMapNodes)}
+    // Import OpenAI here to avoid loading it unless needed
+    const { OpenAI } = await import('openai');
 
-When the user asks to modify the mind map, respond with:
-1. A natural language response explaining what you're doing
-2. If changes are needed, include an "updatedMindMap" field with the modified nodes array
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error('OpenAI API key not configured');
+    }
 
-Keep responses conversational and helpful.`
-          },
-          ...conversationHistory,
-          {
-            role: 'user',
-            content: message
-          }
-        ],
-        temperature: 0.7,
-        max_tokens: 1500,
-      }),
+    const openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
     });
 
-    if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.status}`);
-    }
+    const prompt = `You are an AI assistant helping to modify mind maps. 
+Current mind map: ${JSON.stringify(mindmapData, null, 2)}
 
-    const data = await response.json();
-    const content = data.choices[0]?.message?.content;
+User request: "${message}"
 
-    if (!content) {
-      throw new Error('No content received from OpenAI');
-    }
+Please provide a modified version of the mind map based on the user's request. Return only valid JSON in this exact format:
+{
+  "title": "Main topic title",
+  "children": [...]
+}`;
 
-    // Try to parse if it contains JSON for updated mind map
-    let responseData = { response: content };
-    
-    try {
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        if (parsed.updatedMindMap) {
-          responseData = { 
-            response: content.replace(jsonMatch[0], '').trim(),
-            updatedMindMap: parsed.updatedMindMap 
-          };
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content: "You are a mind map modification expert. Always return valid JSON."
+        },
+        {
+          role: "user",
+          content: prompt
         }
-      }
-    } catch (e) {
-      // Keep original response if JSON parsing fails
+      ],
+      temperature: 0.7,
+      max_tokens: 1000,
+    });
+
+    const content = completion.choices[0]?.message?.content;
+    if (!content) {
+      throw new Error('No response from OpenAI');
     }
 
-    res.json(responseData);
-    
+    try {
+      const modifiedMindMap = JSON.parse(content);
+      res.json({ mindmap: modifiedMindMap });
+    } catch (parseError) {
+      console.error('Failed to parse OpenAI response:', content);
+      res.status(500).json({ error: 'Failed to parse AI response' });
+    }
   } catch (error) {
-    console.error('Chat assistant error:', error);
+    console.error('Chat error:', error);
     res.status(500).json({ error: 'Failed to process chat message' });
-  }
-});
-
-// Import sub-routers
-import quizRouter from './routes/quiz';
-import flashcardRouter from './routes/flashcards';
-
-// Mount sub-routers
-router.use('/quiz', quizRouter);
-router.use('/flashcards', flashcardRouter);
-
-// Quiz routes
-router.post('/quizzes/generate', requireAuth, async (req, res) => {
-  try {
-    const { mindmapId } = req.body;
-    
-    if (!mindmapId) {
-      return res.status(400).json({ error: 'Mindmap ID is required' });
-    }
-
-    // Get the mindmap
-    const mindmap = await storage.getMindmap(mindmapId, req.user!.id);
-    if (!mindmap) {
-      return res.status(404).json({ error: 'Mindmap not found' });
-    }
-
-    // Generate quiz using OpenAI
-    const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are an educational AI that creates comprehensive quizzes from mind map content. Generate questions in multiple formats: multiple choice (4 options), true/false, and fill-in-the-blank. Return JSON with questions array.'
-          },
-          {
-            role: 'user',
-            content: `Create a quiz from this mind map about "${mindmap.title}". Content: ${JSON.stringify(mindmap.content)}. Generate 8-12 questions covering key concepts.`
-          }
-        ],
-        response_format: { type: 'json_object' }
-      })
-    });
-
-    if (!openaiResponse.ok) {
-      throw new Error('Failed to generate quiz');
-    }
-
-    const aiResponse = await openaiResponse.json();
-    const quizData = JSON.parse(aiResponse.choices[0].message.content);
-
-    // Save quiz to database
-    const { data: quiz, error } = await supabaseAdmin
-      .from('quizzes')
-      .insert({
-        mindmap_id: mindmapId,
-        user_id: req.user!.id,
-        questions: quizData.questions
-      })
-      .select()
-      .single();
-
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    // Award XP for quiz generation
-    await storage.createXpTransaction({
-      user_id: req.user!.id,
-      amount: 15,
-      type: 'quiz_generated',
-      reason: 'Generated quiz from mind map',
-      mindmap_id: mindmapId
-    });
-
-    res.json(quiz);
-  } catch (error) {
-    console.error('Generate quiz error:', error);
-    res.status(500).json({ error: 'Failed to generate quiz' });
-  }
-});
-
-router.get('/quizzes/:id', requireAuth, async (req, res) => {
-  try {
-    const { data: quiz, error } = await supabaseAdmin
-      .from('quizzes')
-      .select('*')
-      .eq('id', req.params.id)
-      .eq('user_id', req.user!.id)
-      .single();
-
-    if (error || !quiz) {
-      return res.status(404).json({ error: 'Quiz not found' });
-    }
-
-    res.json(quiz);
-  } catch (error) {
-    console.error('Get quiz error:', error);
-    res.status(500).json({ error: 'Failed to fetch quiz' });
-  }
-});
-
-router.post('/quizzes/:id/submit', requireAuth, async (req, res) => {
-  try {
-    const { answers, timeSpent } = req.body;
-    const quizId = req.params.id;
-
-    // Get quiz
-    const { data: quiz, error } = await supabaseAdmin
-      .from('quizzes')
-      .select('*')
-      .eq('id', quizId)
-      .eq('user_id', req.user!.id)
-      .single();
-
-    if (error || !quiz) {
-      return res.status(404).json({ error: 'Quiz not found' });
-    }
-
-    // Calculate score
-    const questions = quiz.questions;
-    let correctAnswers = 0;
-    
-    questions.forEach((question: any, index: number) => {
-      if (answers[index] === question.correct_answer) {
-        correctAnswers++;
-      }
-    });
-
-    const score = (correctAnswers / questions.length) * 100;
-    const xpEarned = Math.floor(score / 10) * 2; // 2 XP per 10% score
-
-    // Award XP
-    if (xpEarned > 0) {
-      await storage.createXpTransaction({
-        user_id: req.user!.id,
-        amount: xpEarned,
-        type: 'quiz_completed',
-        reason: `Completed quiz with ${score}% score`,
-        mindmap_id: quiz.mindmap_id
-      });
-    }
-
-    res.json({
-      score,
-      correctAnswers,
-      totalQuestions: questions.length,
-      xpEarned,
-      timeSpent
-    });
-  } catch (error) {
-    console.error('Submit quiz error:', error);
-    res.status(500).json({ error: 'Failed to submit quiz' });
-  }
-});
-
-// Flashcard routes
-router.post('/flashcards/generate', requireAuth, async (req, res) => {
-  try {
-    const { mindmapId } = req.body;
-    
-    if (!mindmapId) {
-      return res.status(400).json({ error: 'Mindmap ID is required' });
-    }
-
-    // Get the mindmap
-    const mindmap = await storage.getMindmap(mindmapId, req.user!.id);
-    if (!mindmap) {
-      return res.status(404).json({ error: 'Mindmap not found' });
-    }
-
-    // Generate flashcards using OpenAI
-    const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are an educational AI that creates flashcards from mind map content. Generate clear, concise flashcards with front (question/term) and back (answer/definition). Return JSON with cards array.'
-          },
-          {
-            role: 'user',
-            content: `Create flashcards from this mind map about "${mindmap.title}". Content: ${JSON.stringify(mindmap.content)}. Generate 10-15 flashcards covering key terms and concepts.`
-          }
-        ],
-        response_format: { type: 'json_object' }
-      })
-    });
-
-    if (!openaiResponse.ok) {
-      throw new Error('Failed to generate flashcards');
-    }
-
-    const aiResponse = await openaiResponse.json();
-    const flashcardData = JSON.parse(aiResponse.choices[0].message.content);
-
-    // Save flashcards to database
-    const { data: flashcards, error } = await supabaseAdmin
-      .from('flashcards')
-      .insert({
-        mindmap_id: mindmapId,
-        user_id: req.user!.id,
-        cards: flashcardData.cards
-      })
-      .select()
-      .single();
-
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    // Award XP for flashcard generation
-    await storage.createXpTransaction({
-      user_id: req.user!.id,
-      amount: 10,
-      type: 'flashcards_generated',
-      reason: 'Generated flashcards from mind map',
-      mindmap_id: mindmapId
-    });
-
-    res.json(flashcards);
-  } catch (error) {
-    console.error('Generate flashcards error:', error);
-    res.status(500).json({ error: 'Failed to generate flashcards' });
-  }
-});
-
-router.get('/flashcards/:id', requireAuth, async (req, res) => {
-  try {
-    const { data: flashcards, error } = await supabaseAdmin
-      .from('flashcards')
-      .select('*')
-      .eq('id', req.params.id)
-      .eq('user_id', req.user!.id)
-      .single();
-
-    if (error || !flashcards) {
-      return res.status(404).json({ error: 'Flashcards not found' });
-    }
-
-    res.json(flashcards);
-  } catch (error) {
-    console.error('Get flashcards error:', error);
-    res.status(500).json({ error: 'Failed to fetch flashcards' });
-  }
-});
-
-// AI Chat route for mindmap editing
-router.post('/mindmap-chat', requireAuth, async (req, res) => {
-  try {
-    const { mindmapId, message, mindMapNodes, conversationHistory } = req.body;
-
-    // Get mindmap
-    const mindmap = await storage.getMindmap(mindmapId, req.user!.id);
-    if (!mindmap) {
-      return res.status(404).json({ error: 'Mindmap not found' });
-    }
-
-    // Use OpenAI to process the chat message
-    const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          {
-            role: 'system',
-            content: `You are an AI assistant that helps edit mind maps. You can:
-            1. Add new nodes to the mind map
-            2. Change node colors and properties
-            3. Suggest improvements
-            4. Generate quizzes or flashcards
-            
-            Current mindmap: ${JSON.stringify(mindMapNodes)}
-            
-            If the user requests changes to the mind map, respond with both a text explanation AND include "MINDMAP_UPDATE:" followed by the updated nodes array in JSON format.
-            
-            For other requests, just provide helpful text responses.`
-          },
-          ...conversationHistory,
-          {
-            role: 'user',
-            content: message
-          }
-        ]
-      })
-    });
-
-    if (!openaiResponse.ok) {
-      throw new Error('Failed to get AI response');
-    }
-
-    const aiResponse = await openaiResponse.json();
-    let responseText = aiResponse.choices[0].message.content;
-    let updatedMindMap = null;
-
-    // Check if AI provided mindmap updates
-    if (responseText.includes('MINDMAP_UPDATE:')) {
-      const parts = responseText.split('MINDMAP_UPDATE:');
-      responseText = parts[0].trim();
-      try {
-        updatedMindMap = JSON.parse(parts[1].trim());
-        
-        // Update mindmap in database
-        await storage.updateMindmap(mindmapId, req.user!.id, {
-          content: { nodes: updatedMindMap }
-        });
-      } catch (parseError) {
-        console.error('Error parsing mindmap update:', parseError);
-      }
-    }
-
-    res.json({
-      response: responseText,
-      updatedMindMap
-    });
-  } catch (error) {
-    console.error('AI chat error:', error);
-    res.status(500).json({ error: 'Failed to process chat message' });
-  }
-});
-
-// Collaboration routes
-router.post('/mindmaps/:id/share', requireAuth, async (req, res) => {
-  try {
-    const { permissions = 'read', expiresInDays = 7 } = req.body;
-    const mindmapId = req.params.id;
-
-    // Verify mindmap ownership
-    const mindmap = await storage.getMindmap(mindmapId, req.user!.id);
-    if (!mindmap) {
-      return res.status(404).json({ error: 'Mindmap not found' });
-    }
-
-    // Generate unique share token
-    const shareToken = Buffer.from(JSON.stringify({
-      mindmapId,
-      permissions,
-      createdBy: req.user!.id,
-      exp: Date.now() + (expiresInDays * 24 * 60 * 60 * 1000)
-    })).toString('base64');
-
-    // Save collaboration session
-    const { data: session, error } = await supabaseAdmin
-      .from('collab_sessions')
-      .insert({
-        mindmap_id: mindmapId,
-        session_token: shareToken,
-        permissions,
-        created_by: req.user!.id,
-        expires_at: new Date(Date.now() + (expiresInDays * 24 * 60 * 60 * 1000))
-      })
-      .select()
-      .single();
-
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    res.json({
-      shareToken,
-      shareUrl: `${process.env.CLIENT_URL || 'http://localhost:5000'}/collaborate/${shareToken}`,
-      permissions,
-      expiresAt: session.expires_at
-    });
-  } catch (error) {
-    console.error('Share mindmap error:', error);
-    res.status(500).json({ error: 'Failed to create share link' });
-  }
-});
-
-router.get('/collaborate/:token', optionalAuth, async (req, res) => {
-  try {
-    const token = req.params.token;
-
-    // Verify collaboration session
-    const { data: session, error } = await supabaseAdmin
-      .from('collab_sessions')
-      .select('*')
-      .eq('session_token', token)
-      .single();
-
-    if (error || !session) {
-      return res.status(404).json({ error: 'Invalid or expired share link' });
-    }
-
-    // Check if expired
-    if (new Date() > new Date(session.expires_at)) {
-      return res.status(410).json({ error: 'Share link has expired' });
-    }
-
-    // Get mindmap (with basic access since this is a shared link)
-    const { data: mindmap, error: mindmapError } = await supabaseAdmin
-      .from('mindmaps')
-      .select('*')
-      .eq('id', session.mindmap_id)
-      .single();
-
-    if (mindmapError || !mindmap) {
-      return res.status(404).json({ error: 'Mindmap not found' });
-    }
-
-    res.json({
-      mindmap,
-      permissions: session.permissions,
-      canEdit: session.permissions === 'write'
-    });
-  } catch (error) {
-    console.error('Get collaboration error:', error);
-    res.status(500).json({ error: 'Failed to access shared mindmap' });
   }
 });
 

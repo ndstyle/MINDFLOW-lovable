@@ -1,18 +1,27 @@
+
 import { createClient } from '@supabase/supabase-js';
+import type { Database } from '@shared/supabase-types';
 
-// For development, we'll use a placeholder that gets the actual values from the server
-const supabaseUrl = 'https://placeholder.supabase.co';
-const supabaseAnonKey = 'placeholder-key';
+// Get Supabase credentials from environment variables
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://placeholder.supabase.co';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'placeholder-key';
 
-// Create a client that will be properly configured after authentication
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   auth: {
-    persistSession: false, // We'll handle sessions through our own API
-    autoRefreshToken: false,
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true
   }
 });
 
-// Helper function to configure supabase with real credentials
-export const configureSupabase = (url: string, key: string) => {
-  return createClient(url, key);
+// Helper function to get the current session token
+export const getSessionToken = async () => {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.access_token || null;
+};
+
+// Helper function to check if user is authenticated
+export const isAuthenticated = async () => {
+  const { data: { user } } = await supabase.auth.getUser();
+  return !!user;
 };
