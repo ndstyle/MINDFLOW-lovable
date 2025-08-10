@@ -6,7 +6,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { Header } from '@/components/Header';
+import Header from '@/components/Header';
+import { supabase } from '@/lib/supabase';
 
 export default function Create() {
   const [, setLocation] = useLocation();
@@ -27,7 +28,7 @@ export default function Create() {
 
     if (!intent) {
       toast({
-        title: "Intent required", 
+        title: "Intent required",
         description: "Please select what you want to do with this mind map.",
         variant: "destructive"
       });
@@ -53,10 +54,10 @@ export default function Create() {
       }
 
       const mindmapData = await response.json();
-      
+
       // Navigate to dashboard with the generated mind map
-      setLocation('/dashboard', { 
-        state: { 
+      setLocation('/dashboard', {
+        state: {
           newMindmap: {
             title: text.substring(0, 50) + (text.length > 50 ? '...' : ''),
             content: mindmapData,
@@ -85,19 +86,19 @@ export default function Create() {
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      
+
       <main className="container mx-auto px-4 py-8">
         <div className="max-w-4xl mx-auto">
           <div className="mb-6">
-            <Button 
-              variant="ghost" 
+            <Button
+              variant="ghost"
               onClick={() => setLocation('/')}
               className="mb-4"
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back to Home
             </Button>
-            
+
             <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent mb-2">
               Create Mind Map
             </h1>
@@ -145,7 +146,7 @@ export default function Create() {
                 />
               </div>
 
-              <Button 
+              <Button
                 onClick={handleGenerate}
                 disabled={isGenerating}
                 className="w-full"

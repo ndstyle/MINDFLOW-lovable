@@ -122,38 +122,34 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // User signed up successfully and is logged in
         console.log('User signed up successfully, creating profile for:', data.user.id, 'with username:', username);
         
-        // Check if profile already exists (might be created by trigger)
-        const { data: existingProfile } = await supabase
+        // Wait a moment for the trigger to potentially create the profile
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Check if profile exists after potential trigger creation
+        const { data: existingProfile, error: fetchError } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', data.user.id)
           .single();
 
-        if (!existingProfile) {
-          // Create profile record manually if trigger didn't work
-          const { data: insertData, error: profileError } = await supabase
+        if (!existingProfile && fetchError?.code === 'PGRST116') {
+          // Profile doesn't exist, create it manually
+          const { error: profileError } = await supabase
             .from('profiles')
-            .insert({
+            .upsert({
               id: data.user.id,
               username,
               xp: 0,
               level: 1,
-            })
-            .select();
+            }, { 
+              onConflict: 'id',
+              ignoreDuplicates: true 
+            });
 
-          if (profileError) {
+          if (profileError && profileError.code !== '23505') {
             console.error('Profile creation error:', profileError);
-            if (profileError.code === '23505') {
-              // Profile already exists (race condition with trigger)
-              console.log('Profile already exists, continuing...');
-            } else {
-              throw new Error(`Failed to create profile: ${profileError.message}`);
-            }
-          } else {
-            console.log('Profile created successfully:', insertData);
+            throw new Error(`Failed to create profile: ${profileError.message}`);
           }
-        } else {
-          console.log('Profile already exists:', existingProfile);
         }
       }
 

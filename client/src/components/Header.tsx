@@ -29,7 +29,7 @@ export const Header = () => {
           <Zap className="w-6 h-6 text-primary" />
           mindflow
         </Link>
-        
+
         <nav className="hidden md:flex items-center gap-6">
           <Link href="/" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors lowercase">
             home
@@ -45,7 +45,7 @@ export const Header = () => {
             </>
           )}
         </nav>
-        
+
         <div className="flex items-center gap-3">
           {user && (
             <>
@@ -87,7 +87,7 @@ export const Header = () => {
           )}
         </div>
       </div>
-      
+
       <UnlockablesModal 
         isOpen={showUnlockables} 
         onClose={() => setShowUnlockables(false)} 
@@ -95,3 +95,6 @@ export const Header = () => {
     </header>
   );
 };
+
+export default Header;
+export { Header };

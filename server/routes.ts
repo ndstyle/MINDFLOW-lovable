@@ -24,7 +24,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     const token = authHeader.split(' ')[1];
     const { data: { user }, error } = await supabase.auth.getUser(token);
-    
+
     if (error || !user) {
       throw new Error('Invalid token');
     }
@@ -39,15 +39,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return { user, profile };
   };
 
-  // Middleware to require authentication
+  // Authentication middleware
   const requireAuth = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
-      const { user, profile } = await getAuthenticatedUser(req);
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: 'Authentication required' });
+      }
+
+      const token = authHeader.substring(7);
+
+      // Verify the JWT token with Supabase
+      const { data: { user }, error } = await supabase.auth.getUser(token);
+
+      if (error || !user) {
+        console.error('Auth error:', error);
+        return res.status(401).json({ error: 'Invalid token' });
+      }
+
+      // Fetch user profile with error handling
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      if (profileError && profileError.code !== 'PGRST116') {
+        console.error('Profile fetch error:', profileError);
+        return res.status(500).json({ error: 'Failed to fetch profile' });
+      }
+
+      // If profile doesn't exist, create it
+      if (!profile) {
+        const { data: newProfile, error: createError } = await supabase
+          .from('profiles')
+          .upsert({
+            id: user.id,
+            username: user.email?.split('@')[0] || `user_${user.id.substring(0, 8)}`,
+            xp: 0,
+            level: 1,
+          }, { 
+            onConflict: 'id',
+            ignoreDuplicates: true 
+          })
+          .select()
+          .single();
+
+        if (createError && createError.code !== '23505') {
+          console.error('Profile creation error:', createError);
+          return res.status(500).json({ error: 'Failed to create profile' });
+        }
+
+        req.profile = newProfile || {
+          id: user.id,
+          username: user.email?.split('@')[0] || `user_${user.id.substring(0, 8)}`,
+          xp: 0,
+          level: 1,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+      } else {
+        req.profile = profile;
+      }
+
       req.user = user;
-      req.profile = profile || undefined;
       next();
     } catch (error) {
-      return res.status(401).json({ error: 'Authentication required' });
+      console.error('Auth middleware error:', error);
+      res.status(500).json({ error: 'Internal server error' });
     }
   };
 
@@ -55,7 +114,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/auth/signup', async (req, res) => {
     try {
       const { email, password, username } = req.body;
-      
+
       if (!email || !password || !username) {
         return res.status(400).json({ error: 'Email, password, and username are required' });
       }
@@ -329,7 +388,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (cleanContent.includes('```')) {
         cleanContent = cleanContent.replace(/```/g, '');
       }
-      
+
       const mindmapData = JSON.parse(cleanContent);
       res.json(mindmapData);
     } catch (error) {

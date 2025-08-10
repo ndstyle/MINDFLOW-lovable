@@ -16,4 +16,22 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables')
 }
 
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey)
+export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+  },
+  global: {
+    headers: {
+      'apikey': supabaseAnonKey,
+    },
+  },
+});
+
+// Add auth header to all requests
+supabase.auth.onAuthStateChange((event, session) => {
+  if (session) {
+    // Set up axios defaults or fetch interceptor here if needed
+    console.log('Auth state changed:', event, session?.user?.id);
+  }
+});
