@@ -160,7 +160,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         throw new Error('An account with this email already exists');
       }
       if (error.code === 'unexpected_failure') {
-        throw new Error('Database connection error. The database tables may not exist yet. Please set up your Supabase database with the required tables first.');
+        console.error('Supabase unexpected failure - checking auth setup...');
+        throw new Error('Authentication setup issue. Please check that Row Level Security and triggers are properly configured in Supabase.');
       }
       if (error.message.includes('Failed to create profile')) {
         throw new Error('User account created but profile setup failed. This might be due to missing database tables or permissions.');
