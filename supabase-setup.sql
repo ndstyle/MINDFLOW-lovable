@@ -1,78 +1,91 @@
 -- Mindflow Database Setup for Supabase
 -- Run this SQL in your Supabase SQL Editor to create all required tables
-
--- Enable UUID extension
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+-- Based on the exact schema provided
 
 -- Create profiles table (linked to auth.users)
-CREATE TABLE IF NOT EXISTS profiles (
-    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-    username VARCHAR(50) UNIQUE NOT NULL,
-    xp INTEGER DEFAULT 0 NOT NULL,
-    level INTEGER DEFAULT 1 NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+CREATE TABLE public.profiles (
+  id uuid NOT NULL,
+  username text NOT NULL UNIQUE,
+  xp integer DEFAULT 0,
+  level integer DEFAULT 1,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT profiles_pkey PRIMARY KEY (id),
+  CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)
 );
 
 -- Create mindmaps table
-CREATE TABLE IF NOT EXISTS mindmaps (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    owner_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-    title VARCHAR(200) NOT NULL,
-    intent VARCHAR(20) CHECK (intent IN ('study', 'teach', 'project', 'brainstorm', 'presentation')) NOT NULL,
-    content JSONB NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+CREATE TABLE public.mindmaps (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  owner_id uuid,
+  title text NOT NULL,
+  intent text CHECK (intent = ANY (ARRAY['study'::text, 'teach'::text, 'project'::text, 'brainstorm'::text, 'presentation'::text])),
+  content jsonb NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT mindmaps_pkey PRIMARY KEY (id),
+  CONSTRAINT mindmaps_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES public.profiles(id)
 );
 
 -- Create unlockables table
-CREATE TABLE IF NOT EXISTS unlockables (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    name VARCHAR(100) NOT NULL,
-    type VARCHAR(20) CHECK (type IN ('theme', 'feature')) NOT NULL,
-    cost INTEGER NOT NULL
+CREATE TABLE public.unlockables (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  name text NOT NULL UNIQUE,
+  type text CHECK (type = ANY (ARRAY['theme'::text, 'feature'::text])),
+  cost integer NOT NULL,
+  CONSTRAINT unlockables_pkey PRIMARY KEY (id)
 );
 
 -- Create user_unlockables table
-CREATE TABLE IF NOT EXISTS user_unlockables (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    profile_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-    unlockable_id UUID NOT NULL REFERENCES unlockables(id) ON DELETE CASCADE,
-    unlocked_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    UNIQUE(profile_id, unlockable_id)
+CREATE TABLE public.user_unlockables (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  profile_id uuid,
+  unlockable_id uuid,
+  unlocked_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT user_unlockables_pkey PRIMARY KEY (id),
+  CONSTRAINT user_unlockables_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.profiles(id),
+  CONSTRAINT user_unlockables_unlockable_id_fkey FOREIGN KEY (unlockable_id) REFERENCES public.unlockables(id)
 );
 
 -- Create xp_transactions table
-CREATE TABLE IF NOT EXISTS xp_transactions (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    profile_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-    amount INTEGER NOT NULL,
-    reason VARCHAR(200) NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+CREATE TABLE public.xp_transactions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  profile_id uuid,
+  amount integer NOT NULL,
+  reason text NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT xp_transactions_pkey PRIMARY KEY (id),
+  CONSTRAINT xp_transactions_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.profiles(id)
 );
 
 -- Create quizzes table
-CREATE TABLE IF NOT EXISTS quizzes (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    mindmap_id UUID NOT NULL REFERENCES mindmaps(id) ON DELETE CASCADE,
-    questions JSONB NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+CREATE TABLE public.quizzes (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  mindmap_id uuid,
+  questions jsonb NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT quizzes_pkey PRIMARY KEY (id),
+  CONSTRAINT quizzes_mindmap_id_fkey FOREIGN KEY (mindmap_id) REFERENCES public.mindmaps(id)
 );
 
 -- Create flashcards table
-CREATE TABLE IF NOT EXISTS flashcards (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    mindmap_id UUID NOT NULL REFERENCES mindmaps(id) ON DELETE CASCADE,
-    cards JSONB NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+CREATE TABLE public.flashcards (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  mindmap_id uuid,
+  cards jsonb NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT flashcards_pkey PRIMARY KEY (id),
+  CONSTRAINT flashcards_mindmap_id_fkey FOREIGN KEY (mindmap_id) REFERENCES public.mindmaps(id)
 );
 
 -- Create collab_sessions table
-CREATE TABLE IF NOT EXISTS collab_sessions (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    mindmap_id UUID NOT NULL REFERENCES mindmaps(id) ON DELETE CASCADE,
-    session_token VARCHAR(100) UNIQUE NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+CREATE TABLE public.collab_sessions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  mindmap_id uuid,
+  session_token text NOT NULL UNIQUE,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT collab_sessions_pkey PRIMARY KEY (id),
+  CONSTRAINT collab_sessions_mindmap_id_fkey FOREIGN KEY (mindmap_id) REFERENCES public.mindmaps(id)
 );
 
 -- Create updated_at trigger function
@@ -85,64 +98,64 @@ END;
 $$ language 'plpgsql';
 
 -- Add updated_at triggers
-CREATE TRIGGER update_profiles_updated_at BEFORE UPDATE ON profiles FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-CREATE TRIGGER update_mindmaps_updated_at BEFORE UPDATE ON mindmaps FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_profiles_updated_at BEFORE UPDATE ON public.profiles FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_mindmaps_updated_at BEFORE UPDATE ON public.mindmaps FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Set up Row Level Security (RLS)
-ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE mindmaps ENABLE ROW LEVEL SECURITY;
-ALTER TABLE user_unlockables ENABLE ROW LEVEL SECURITY;
-ALTER TABLE xp_transactions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE quizzes ENABLE ROW LEVEL SECURITY;
-ALTER TABLE flashcards ENABLE ROW LEVEL SECURITY;
-ALTER TABLE collab_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.mindmaps ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_unlockables ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.xp_transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.quizzes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.flashcards ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.collab_sessions ENABLE ROW LEVEL SECURITY;
 
 -- Profiles policies
-CREATE POLICY "Users can view own profile" ON profiles FOR SELECT USING (auth.uid() = id);
-CREATE POLICY "Users can update own profile" ON profiles FOR UPDATE USING (auth.uid() = id);
-CREATE POLICY "Users can insert own profile" ON profiles FOR INSERT WITH CHECK (auth.uid() = id);
+CREATE POLICY "Users can view own profile" ON public.profiles FOR SELECT USING (auth.uid() = id);
+CREATE POLICY "Users can update own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
+CREATE POLICY "Users can insert own profile" ON public.profiles FOR INSERT WITH CHECK (auth.uid() = id);
 
 -- Mindmaps policies
-CREATE POLICY "Users can view own mindmaps" ON mindmaps FOR SELECT USING (auth.uid() = owner_id);
-CREATE POLICY "Users can insert own mindmaps" ON mindmaps FOR INSERT WITH CHECK (auth.uid() = owner_id);
-CREATE POLICY "Users can update own mindmaps" ON mindmaps FOR UPDATE USING (auth.uid() = owner_id);
-CREATE POLICY "Users can delete own mindmaps" ON mindmaps FOR DELETE USING (auth.uid() = owner_id);
+CREATE POLICY "Users can view own mindmaps" ON public.mindmaps FOR SELECT USING (auth.uid() = owner_id);
+CREATE POLICY "Users can insert own mindmaps" ON public.mindmaps FOR INSERT WITH CHECK (auth.uid() = owner_id);
+CREATE POLICY "Users can update own mindmaps" ON public.mindmaps FOR UPDATE USING (auth.uid() = owner_id);
+CREATE POLICY "Users can delete own mindmaps" ON public.mindmaps FOR DELETE USING (auth.uid() = owner_id);
 
 -- User unlockables policies
-CREATE POLICY "Users can view own unlockables" ON user_unlockables FOR SELECT USING (auth.uid() = profile_id);
-CREATE POLICY "Users can insert own unlockables" ON user_unlockables FOR INSERT WITH CHECK (auth.uid() = profile_id);
+CREATE POLICY "Users can view own unlockables" ON public.user_unlockables FOR SELECT USING (auth.uid() = profile_id);
+CREATE POLICY "Users can insert own unlockables" ON public.user_unlockables FOR INSERT WITH CHECK (auth.uid() = profile_id);
 
 -- XP transactions policies
-CREATE POLICY "Users can view own xp transactions" ON xp_transactions FOR SELECT USING (auth.uid() = profile_id);
-CREATE POLICY "Users can insert own xp transactions" ON xp_transactions FOR INSERT WITH CHECK (auth.uid() = profile_id);
+CREATE POLICY "Users can view own xp transactions" ON public.xp_transactions FOR SELECT USING (auth.uid() = profile_id);
+CREATE POLICY "Users can insert own xp transactions" ON public.xp_transactions FOR INSERT WITH CHECK (auth.uid() = profile_id);
 
 -- Quizzes policies
-CREATE POLICY "Users can view quizzes for own mindmaps" ON quizzes FOR SELECT USING (
-    EXISTS (SELECT 1 FROM mindmaps WHERE mindmaps.id = quizzes.mindmap_id AND mindmaps.owner_id = auth.uid())
+CREATE POLICY "Users can view quizzes for own mindmaps" ON public.quizzes FOR SELECT USING (
+    EXISTS (SELECT 1 FROM public.mindmaps WHERE mindmaps.id = quizzes.mindmap_id AND mindmaps.owner_id = auth.uid())
 );
-CREATE POLICY "Users can insert quizzes for own mindmaps" ON quizzes FOR INSERT WITH CHECK (
-    EXISTS (SELECT 1 FROM mindmaps WHERE mindmaps.id = quizzes.mindmap_id AND mindmaps.owner_id = auth.uid())
+CREATE POLICY "Users can insert quizzes for own mindmaps" ON public.quizzes FOR INSERT WITH CHECK (
+    EXISTS (SELECT 1 FROM public.mindmaps WHERE mindmaps.id = quizzes.mindmap_id AND mindmaps.owner_id = auth.uid())
 );
 
 -- Flashcards policies
-CREATE POLICY "Users can view flashcards for own mindmaps" ON flashcards FOR SELECT USING (
-    EXISTS (SELECT 1 FROM mindmaps WHERE mindmaps.id = flashcards.mindmap_id AND mindmaps.owner_id = auth.uid())
+CREATE POLICY "Users can view flashcards for own mindmaps" ON public.flashcards FOR SELECT USING (
+    EXISTS (SELECT 1 FROM public.mindmaps WHERE mindmaps.id = flashcards.mindmap_id AND mindmaps.owner_id = auth.uid())
 );
-CREATE POLICY "Users can insert flashcards for own mindmaps" ON flashcards FOR INSERT WITH CHECK (
-    EXISTS (SELECT 1 FROM mindmaps WHERE mindmaps.id = flashcards.mindmap_id AND mindmaps.owner_id = auth.uid())
+CREATE POLICY "Users can insert flashcards for own mindmaps" ON public.flashcards FOR INSERT WITH CHECK (
+    EXISTS (SELECT 1 FROM public.mindmaps WHERE mindmaps.id = flashcards.mindmap_id AND mindmaps.owner_id = auth.uid())
 );
 
 -- Collaboration sessions policies
-CREATE POLICY "Users can view collab sessions for own mindmaps" ON collab_sessions FOR SELECT USING (
-    EXISTS (SELECT 1 FROM mindmaps WHERE mindmaps.id = collab_sessions.mindmap_id AND mindmaps.owner_id = auth.uid())
+CREATE POLICY "Users can view collab sessions for own mindmaps" ON public.collab_sessions FOR SELECT USING (
+    EXISTS (SELECT 1 FROM public.mindmaps WHERE mindmaps.id = collab_sessions.mindmap_id AND mindmaps.owner_id = auth.uid())
 );
-CREATE POLICY "Users can insert collab sessions for own mindmaps" ON collab_sessions FOR INSERT WITH CHECK (
-    EXISTS (SELECT 1 FROM mindmaps WHERE mindmaps.id = collab_sessions.mindmap_id AND mindmaps.owner_id = auth.uid())
+CREATE POLICY "Users can insert collab sessions for own mindmaps" ON public.collab_sessions FOR INSERT WITH CHECK (
+    EXISTS (SELECT 1 FROM public.mindmaps WHERE mindmaps.id = collab_sessions.mindmap_id AND mindmaps.owner_id = auth.uid())
 );
 
 -- Unlockables table should be publicly readable
-ALTER TABLE unlockables ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Anyone can view unlockables" ON unlockables FOR SELECT TO authenticated USING (true);
+ALTER TABLE public.unlockables ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Anyone can view unlockables" ON public.unlockables FOR SELECT TO authenticated USING (true);
 
 -- Insert some default unlockables
 INSERT INTO unlockables (name, type, cost) VALUES
