@@ -1,52 +1,58 @@
 import { useState, useEffect } from 'react';
+import { useAuth } from './useAuth';
+import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
+import type { Database } from '../../../lib/supabase';
 
-export interface Unlockable {
-  id: string;
-  name: string;
-  type: 'color_theme' | 'feature';
-  xp_cost: number;
-  description: string | null;
-  config: any;
-  created_at: string;
-}
-
-export interface UserUnlockable {
-  id: string;
-  user_id: string;
-  unlockable_id: string;
-  unlocked_at: string;
-}
+type Unlockable = Database['public']['Tables']['unlockables']['Row'];
+type UserUnlockable = Database['public']['Tables']['user_unlockables']['Row'];
 
 export const useUnlockables = () => {
+  const { user } = useAuth();
   const [unlockables, setUnlockables] = useState<Unlockable[]>([]);
   const [userUnlockables, setUserUnlockables] = useState<UserUnlockable[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchUnlockables();
-    fetchUserUnlockables();
-  }, []);
+    if (user) {
+      fetchUserUnlockables();
+    }
+  }, [user]);
 
   const fetchUnlockables = async () => {
     try {
-      const response = await fetch('/api/unlockables');
-      if (response.ok) {
-        const data = await response.json();
-        setUnlockables(data);
+      const { data, error } = await supabase
+        .from('unlockables')
+        .select('*')
+        .order('cost', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching unlockables:', error);
+        return;
       }
+
+      setUnlockables(data || []);
     } catch (error) {
       console.error('Error fetching unlockables:', error);
     }
   };
 
   const fetchUserUnlockables = async () => {
+    if (!user) return;
+
     try {
-      const response = await fetch('/api/user-unlockables');
-      if (response.ok) {
-        const data = await response.json();
-        setUserUnlockables(data);
+      const { data, error } = await supabase
+        .from('user_unlockables')
+        .select('*')
+        .eq('profile_id', user.id);
+
+      if (error) {
+        console.error('Error fetching user unlockables:', error);
+        return;
       }
+
+      setUserUnlockables(data || []);
     } catch (error) {
       console.error('Error fetching user unlockables:', error);
     } finally {
@@ -54,56 +60,55 @@ export const useUnlockables = () => {
     }
   };
 
-  const unlockItem = async (unlockableId: string, spendXPFunction: (amount: number, reason: string) => Promise<boolean>) => {
+  const unlockItem = async (unlockableId: string, spendXPCallback: (amount: number, reason: string) => Promise<any>) => {
+    if (!user) {
+      toast.error('Please sign in to unlock items');
+      return;
+    }
+
+    const unlockable = unlockables.find(u => u.id === unlockableId);
+    if (!unlockable) {
+      toast.error('Unlockable item not found');
+      return;
+    }
+
+    if (hasUnlocked(unlockableId)) {
+      toast.error('Item already unlocked');
+      return;
+    }
+
     try {
-      const unlockable = unlockables.find(u => u.id === unlockableId);
-      if (!unlockable) return false;
-
-      // Check if already unlocked
-      if (userUnlockables.some(u => u.unlockable_id === unlockableId)) {
-        toast.error('Already unlocked!');
-        return false;
-      }
-
       // Spend XP first
-      const success = await spendXPFunction(unlockable.xp_cost, unlockable.name);
-      if (!success) {
-        return false;
+      await spendXPCallback(unlockable.cost, `Unlocking ${unlockable.name}`);
+
+      // Create user unlockable record
+      const { error } = await supabase
+        .from('user_unlockables')
+        .insert({
+          profile_id: user.id,
+          unlockable_id: unlockableId,
+        });
+
+      if (error) {
+        throw error;
       }
 
-      // Unlock item
-      const response = await fetch('/api/unlock-item', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ unlockableId }),
-      });
-
-      if (response.ok) {
-        await fetchUserUnlockables();
-        toast.success(`${unlockable.name} unlocked!`);
-        return true;
-      } else {
-        const error = await response.json();
-        toast.error(error.error || 'Failed to unlock item');
-        return false;
-      }
-    } catch (error) {
+      // Refresh user unlockables
+      await fetchUserUnlockables();
+      toast.success(`${unlockable.name} unlocked!`);
+    } catch (error: any) {
       console.error('Error unlocking item:', error);
-      toast.error('Failed to unlock item');
-      return false;
+      toast.error(error.message || 'Failed to unlock item');
     }
   };
 
-  const hasUnlocked = (unlockableId: string) => {
-    return userUnlockables.some(u => u.unlockable_id === unlockableId);
+  const hasUnlocked = (unlockableId: string): boolean => {
+    return userUnlockables.some(uu => uu.unlockable_id === unlockableId);
   };
 
-  const hasFeature = (featureName: string) => {
-    const unlockable = unlockables.find(u => u.name === featureName && u.type === 'feature');
-    if (!unlockable) return false;
-    return hasUnlocked(unlockable.id);
+  const hasFeature = (featureName: string): boolean => {
+    const featureUnlockable = unlockables.find(u => u.type === 'feature' && u.name === featureName);
+    return featureUnlockable ? hasUnlocked(featureUnlockable.id) : false;
   };
 
   return {
@@ -113,6 +118,5 @@ export const useUnlockables = () => {
     unlockItem,
     hasUnlocked,
     hasFeature,
-    fetchUserUnlockables
   };
 };

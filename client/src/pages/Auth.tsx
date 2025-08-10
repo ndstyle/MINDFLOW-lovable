@@ -23,33 +23,18 @@ const Auth = () => {
     }
   }, [user, setLocation]);
 
+  const { signUp, signIn } = useAuth();
+
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      const response = await fetch('/api/auth/signup', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          username,
-          email,
-          password,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        toast.success("Account created successfully!");
-        setLocation("/");
-      } else {
-        toast.error(data.error || "Signup failed");
-      }
+      await signUp(email, password, username);
+      toast.success("Account created successfully!");
+      setLocation("/");
     } catch (error: any) {
-      toast.error("Signup failed");
+      toast.error(error.message || "Signup failed");
     } finally {
       setLoading(false);
     }
@@ -60,27 +45,11 @@ const Auth = () => {
     setLoading(true);
 
     try {
-      const response = await fetch('/api/auth/signin', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email,
-          password,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        toast.success("Login successful!");
-        setLocation("/");
-      } else {
-        toast.error(data.error || "Login failed");
-      }
+      await signIn(email, password);
+      toast.success("Signed in successfully!");
+      setLocation("/");
     } catch (error: any) {
-      toast.error("Login failed");
+      toast.error(error.message || "Sign in failed");
     } finally {
       setLoading(false);
     }

@@ -1,7 +1,13 @@
-import type { Express } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { supabase } from "../lib/supabase";
 import type { Database } from "../lib/supabase";
+
+// Extend Request interface
+interface AuthenticatedRequest extends Request {
+  user?: any;
+  profile?: Database['public']['Tables']['profiles']['Row'];
+}
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 type Mindmap = Database['public']['Tables']['mindmaps']['Row'];
@@ -34,11 +40,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   };
 
   // Middleware to require authentication
-  const requireAuth = async (req: any, res: any, next: any) => {
+  const requireAuth = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       const { user, profile } = await getAuthenticatedUser(req);
       req.user = user;
-      req.profile = profile;
+      req.profile = profile || undefined;
       next();
     } catch (error) {
       return res.status(401).json({ error: 'Authentication required' });
@@ -164,12 +170,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Profile routes
-  app.get('/api/profile', requireAuth, async (req, res) => {
+  app.get('/api/profile', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { data: profile, error } = await supabase
         .from('profiles')
         .select('*')
-        .eq('id', req.user.id)
+        .eq('id', req.user!.id)
         .single();
 
       if (error) {
@@ -184,12 +190,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Mindmap routes
-  app.get('/api/mindmaps', requireAuth, async (req, res) => {
+  app.get('/api/mindmaps', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { data: mindmaps, error } = await supabase
         .from('mindmaps')
         .select('*')
-        .eq('owner_id', req.user.id)
+        .eq('owner_id', req.user!.id)
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -203,7 +209,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/mindmaps', requireAuth, async (req, res) => {
+  app.post('/api/mindmaps', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { title, intent, content } = req.body;
 
@@ -216,7 +222,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { data: mindmap, error } = await supabase
         .from('mindmaps')
         .insert({
-          owner_id: req.user.id,
+          owner_id: req.user!.id,
           title,
           intent,
           content,
@@ -254,12 +260,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/user-unlockables', requireAuth, async (req, res) => {
+  app.get('/api/user-unlockables', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { data: userUnlockables, error } = await supabase
         .from('user_unlockables')
         .select('*')
-        .eq('profile_id', req.user.id);
+        .eq('profile_id', req.user!.id);
 
       if (error) {
         return res.status(500).json({ error: error.message });

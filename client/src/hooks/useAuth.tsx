@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext } from "react";
+import { useState, useEffect, createContext, useContext, ReactNode } from "react";
 import { supabase } from "../lib/supabase";
 import type { User, Session } from "@supabase/supabase-js";
 import type { Database } from "../../../lib/supabase";
@@ -17,7 +17,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -25,26 +25,26 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    const getSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
       setSession(session);
       setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id);
-      }
       setLoading(false);
-    });
+    };
+
+    getSession();
 
     // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
+      
       if (session?.user) {
         await fetchProfile(session.user.id);
       } else {
         setProfile(null);
       }
+      
       setLoading(false);
     });
 
@@ -53,18 +53,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const fetchProfile = async (userId: string) => {
     try {
-      const { data, error } = await supabase
+      const { data: profile, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .single();
 
-      if (error) {
+      if (error && error.code !== 'PGRST116') {
         console.error('Error fetching profile:', error);
         return;
       }
 
-      setProfile(data);
+      setProfile(profile || null);
     } catch (error) {
       console.error('Error fetching profile:', error);
     }
@@ -90,46 +90,42 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signUp = async (email: string, password: string, username: string) => {
     try {
-      // Check if username is already taken
-      const { data: existingProfile } = await supabase
-        .from('profiles')
-        .select('username')
-        .eq('username', username)
-        .single();
-
-      if (existingProfile) {
-        throw new Error('Username already taken');
-      }
-
-      // Create auth user
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          data: {
+            username,
+          }
+        }
       });
 
       if (error) {
         throw error;
       }
 
-      if (!data.user) {
-        throw new Error('Failed to create user');
+      // Create profile if user was created
+      if (data.user && !data.session) {
+        // User needs to confirm email
+        throw new Error('Please check your email to confirm your account');
       }
 
-      // Create profile with matching UUID
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .insert({
-          id: data.user.id, // Critical: must match auth.users.id
-          username,
-          xp: 0,
-          level: 1,
-        });
+      if (data.user && data.session) {
+        // User signed up successfully and is logged in
+        // Create profile record
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .insert({
+            id: data.user.id,
+            username,
+            xp: 0,
+            level: 1,
+          });
 
-      if (profileError) {
-        console.error('Profile creation error:', profileError);
-        // Clean up auth user if profile creation fails
-        await supabase.auth.admin.deleteUser(data.user.id);
-        throw new Error(`Database error creating new user: ${profileError.message}`);
+        if (profileError) {
+          console.error('Profile creation error:', profileError);
+          // Don't throw here as user is already created
+        }
       }
 
       // Profile will be fetched automatically via auth state change
@@ -151,7 +147,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  const value = {
+  const value: AuthContextType = {
     user,
     profile,
     session,
@@ -161,7 +157,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     signOut,
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
 };
 
 export const useAuth = () => {
