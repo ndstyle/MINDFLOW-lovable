@@ -1,93 +1,120 @@
-import { useState, useEffect } from 'react';
+import { useAuth } from './useAuth';
+import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
+import type { Database } from '../../../lib/supabase';
 
-export interface Profile {
-  id: string;
-  user_id: string;
-  username: string | null;
-  email: string | null;
-  xp: number;
-  level: number;
-  created_at: string;
-  updated_at: string;
-}
+type Profile = Database['public']['Tables']['profiles']['Row'];
 
 export const useProfile = () => {
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { profile, user, loading } = useAuth();
 
-  useEffect(() => {
-    fetchProfile();
-  }, []);
-
-  const fetchProfile = async () => {
-    try {
-      const response = await fetch('/api/profile');
-      if (response.ok) {
-        const data = await response.json();
-        setProfile(data);
-      }
-    } catch (error) {
-      console.error('Error fetching profile:', error);
-    } finally {
-      setLoading(false);
+  const awardXP = async (amount: number, reason: string) => {
+    if (!user || !profile) {
+      throw new Error('User not authenticated');
     }
-  };
 
-  const awardXP = async (amount: number, reason: string, mindmapId?: string) => {
     try {
-      const response = await fetch('/api/profile/award-xp', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ amount, reason, mindmapId }),
-      });
+      // Create XP transaction
+      const { error: xpError } = await supabase
+        .from('xp_transactions')
+        .insert({
+          profile_id: user.id,
+          amount,
+          reason,
+        });
 
-      if (response.ok) {
-        const updatedProfile = await response.json();
-        setProfile(updatedProfile);
-        toast.success(`+${amount} XP earned! ${reason}`);
-
-        if (updatedProfile.level > (profile?.level || 0)) {
-          toast.success(`🎉 Level up! You're now level ${updatedProfile.level}!`);
-        }
+      if (xpError) {
+        throw xpError;
       }
-    } catch (error) {
+
+      // Update profile XP and level
+      const newXP = profile.xp + amount;
+      const newLevel = Math.floor(newXP / 100) + 1; // Simple leveling: 100 XP per level
+
+      const { data: updatedProfile, error: profileError } = await supabase
+        .from('profiles')
+        .update({
+          xp: newXP,
+          level: newLevel,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', user.id)
+        .select()
+        .single();
+
+      if (profileError) {
+        throw profileError;
+      }
+
+      toast.success(`+${amount} XP earned! ${reason}`);
+      
+      if (newLevel > profile.level) {
+        toast.success(`🎉 Level up! You're now level ${newLevel}!`);
+      }
+
+      return updatedProfile;
+    } catch (error: any) {
       console.error('Error awarding XP:', error);
+      toast.error('Failed to award XP');
+      throw error;
     }
   };
 
   const spendXP = async (amount: number, reason: string) => {
-    try {
-      const response = await fetch('/api/profile/spend-xp', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ amount, reason }),
-      });
+    if (!user || !profile) {
+      throw new Error('User not authenticated');
+    }
 
-      if (response.ok) {
-        const data = await response.json();
-        setProfile(data.profile);
-        return true;
-      } else {
-        const error = await response.json();
-        toast.error(error.error || 'Failed to spend XP');
-        return false;
+    if (profile.xp < amount) {
+      throw new Error('Insufficient XP');
+    }
+
+    try {
+      // Create negative XP transaction
+      const { error: xpError } = await supabase
+        .from('xp_transactions')
+        .insert({
+          profile_id: user.id,
+          amount: -amount,
+          reason,
+        });
+
+      if (xpError) {
+        throw xpError;
       }
-    } catch (error) {
+
+      // Update profile XP
+      const newXP = profile.xp - amount;
+      const newLevel = Math.floor(newXP / 100) + 1;
+
+      const { data: updatedProfile, error: profileError } = await supabase
+        .from('profiles')
+        .update({
+          xp: newXP,
+          level: newLevel,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', user.id)
+        .select()
+        .single();
+
+      if (profileError) {
+        throw profileError;
+      }
+
+      toast.success(`-${amount} XP spent on ${reason}`);
+      return updatedProfile;
+    } catch (error: any) {
       console.error('Error spending XP:', error);
-      return false;
+      toast.error('Failed to spend XP');
+      throw error;
     }
   };
 
   return {
     profile,
     loading,
-    fetchProfile,
     awardXP,
-    spendXP
+    spendXP,
   };
 };
