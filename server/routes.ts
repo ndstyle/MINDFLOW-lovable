@@ -1,553 +1,484 @@
-import express from 'express';
-import { supabaseAdmin } from './supabase';
-import { storage } from './storage';
-import type { InsertProfile, InsertMindmap, InsertXpTransaction, InsertUserUnlockable } from '@shared/supabase-types';
+import type { Express } from "express";
+import { createServer, type Server } from "http";
+import { storage } from "./storage";
+import bcrypt from "bcrypt";
+import session from "express-session";
+import { insertUserSchema, insertProfileSchema, insertMindmapSchema, insertXpTransactionSchema, insertUserUnlockableSchema } from "@shared/schema";
+import { z } from "zod";
 
-const router = express.Router();
-
-// Middleware to require authentication
-const requireAuth = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
-  try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Authentication required' });
-    }
-
-    const token = authHeader.substring(7);
-
-    // Use Supabase to verify the JWT token
-    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
-
-    if (error || !user) {
-      return res.status(401).json({ error: 'Invalid or expired token' });
-    }
-
-    req.user = { id: user.id, email: user.email! };
-    next();
-  } catch (error) {
-    console.error('Auth middleware error:', error);
-    res.status(401).json({ error: 'Authentication failed' });
+// Session middleware setup
+declare module "express-session" {
+  interface SessionData {
+    userId: string;
   }
-};
-
-// Optional auth middleware for routes that work with or without auth
-const optionalAuth = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
-  try {
-    const authHeader = req.headers.authorization;
-    if (authHeader?.startsWith('Bearer ')) {
-      const token = authHeader.substring(7);
-      const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
-
-      if (!error && user) {
-        req.user = { id: user.id, email: user.email! };
-      }
-    }
-    next();
-  } catch (error) {
-    // Continue without auth
-    next();
-  }
-};
-
-// Auth routes
-router.post('/auth/signup', async (req, res) => {
-  try {
-    const { email, password, username } = req.body;
-
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password are required' });
-    }
-
-    // Create user with Supabase Auth
-    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true
-    });
-
-    if (authError) {
-      return res.status(400).json({ error: authError.message });
-    }
-
-    const user = authData.user;
-    if (!user) {
-      return res.status(400).json({ error: 'Failed to create user' });
-    }
-
-    // Create profile
-    const profileData: InsertProfile = {
-      user_id: user.id,
-      email: user.email!,
-      username: username || null,
-      xp: 0,
-      level: 1
-    };
-
-    const profile = await storage.createProfile(profileData);
-
-    // Generate session token
-    const { data: { session }, error: sessionError } = await supabaseAdmin.auth.admin.generateLink({
-      type: 'magiclink',
-      email: user.email!
-    });
-
-    if (sessionError) {
-      return res.status(400).json({ error: 'Failed to create session' });
-    }
-
-    res.json({
-      user: {
-        id: user.id,
-        email: user.email
-      },
-      profile,
-      token: session?.access_token
-    });
-  } catch (error) {
-    console.error('Signup error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-router.post('/auth/signin', async (req, res) => {
-  try {
-    const { email, password } = req.body;
-
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password are required' });
-    }
-
-    // Sign in with Supabase Auth
-    const { data, error } = await supabaseAdmin.auth.signInWithPassword({
-      email,
-      password
-    });
-
-    if (error) {
-      return res.status(400).json({ error: error.message });
-    }
-
-    const user = data.user;
-    if (!user) {
-      return res.status(400).json({ error: 'Authentication failed' });
-    }
-
-    // Get profile
-    const profile = await storage.getProfile(user.id);
-    if (!profile) {
-      return res.status(404).json({ error: 'Profile not found' });
-    }
-
-    res.json({
-      user: {
-        id: user.id,
-        email: user.email
-      },
-      profile,
-      token: data.session.access_token
-    });
-  } catch (error) {
-    console.error('Signin error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-router.post('/auth/signout', requireAuth, async (req, res) => {
-  try {
-    const authHeader = req.headers.authorization;
-    const token = authHeader?.substring(7);
-
-    if (token) {
-      await supabaseAdmin.auth.admin.signOut(token);
-    }
-
-    res.json({ message: 'Signed out successfully' });
-  } catch (error) {
-    console.error('Signout error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// Profile routes
-router.get('/profile', requireAuth, async (req, res) => {
-  try {
-    const profile = await storage.getProfile(req.user!.id);
-    if (!profile) {
-      return res.status(404).json({ error: 'Profile not found' });
-    }
-    res.json(profile);
-  } catch (error) {
-    console.error('Get profile error:', error);
-    res.status(500).json({ error: 'Failed to fetch profile' });
-  }
-});
-
-router.put('/profile', requireAuth, async (req, res) => {
-  try {
-    const { username } = req.body;
-    const profile = await storage.updateProfile(req.user!.id, { username });
-    res.json(profile);
-  } catch (error) {
-    console.error('Update profile error:', error);
-    res.status(500).json({ error: 'Failed to update profile' });
-  }
-});
-
-// Mindmap routes
-router.get('/mindmaps', requireAuth, async (req, res) => {
-  try {
-    const limit = req.query.limit ? parseInt(req.query.limit as string) : 20;
-    const mindmaps = await storage.getMindmaps(req.user!.id, limit);
-    res.json(mindmaps);
-  } catch (error) {
-    console.error('Get mindmaps error:', error);
-    res.status(500).json({ error: 'Failed to fetch mindmaps' });
-  }
-});
-
-router.get('/mindmaps/:id', requireAuth, async (req, res) => {
-  try {
-    const mindmap = await storage.getMindmap(req.params.id, req.user!.id);
-    if (!mindmap) {
-      return res.status(404).json({ error: 'Mindmap not found' });
-    }
-    res.json(mindmap);
-  } catch (error) {
-    console.error('Get mindmap error:', error);
-    res.status(500).json({ error: 'Failed to fetch mindmap' });
-  }
-});
-
-router.post('/mindmaps', requireAuth, async (req, res) => {
-  try {
-    const { title, content, category } = req.body;
-
-    const xpEarned = 10; // Base XP for creating a mindmap
-
-    const mindmapData: InsertMindmap = {
-      user_id: req.user!.id,
-      title,
-      content,
-      category: category || null,
-      xp_earned: xpEarned
-    };
-
-    const mindmap = await storage.createMindmap(mindmapData);
-
-    // Award XP
-    const xpTransaction: InsertXpTransaction = {
-      user_id: req.user!.id,
-      amount: xpEarned,
-      type: 'earned',
-      reason: 'Created mindmap',
-      mindmap_id: mindmap.id
-    };
-
-    await storage.createXpTransaction(xpTransaction);
-
-    // Update profile XP and level
-    const profile = await storage.getProfile(req.user!.id);
-    if (profile) {
-      const newXp = profile.xp + xpEarned;
-      const newLevel = Math.floor(newXp / 100) + 1; // Level up every 100 XP
-
-      await storage.updateProfile(req.user!.id, {
-        xp: newXp,
-        level: newLevel
-      });
-    }
-
-    res.json(mindmap);
-  } catch (error) {
-    console.error('Create mindmap error:', error);
-    res.status(500).json({ error: 'Failed to create mindmap' });
-  }
-});
-
-router.delete('/mindmaps/:id', requireAuth, async (req, res) => {
-  try {
-    const success = await storage.deleteMindmap(req.params.id, req.user!.id);
-    if (!success) {
-      return res.status(404).json({ error: 'Mindmap not found' });
-    }
-    res.json({ message: 'Mindmap deleted successfully' });
-  } catch (error) {
-    console.error('Delete mindmap error:', error);
-    res.status(500).json({ error: 'Failed to delete mindmap' });
-  }
-});
-
-// XP routes
-router.get('/xp-transactions', requireAuth, async (req, res) => {
-  try {
-    const transactions = await storage.getXpTransactions(req.user!.id);
-    res.json(transactions);
-  } catch (error) {
-    console.error('Get XP transactions error:', error);
-    res.status(500).json({ error: 'Failed to fetch XP transactions' });
-  }
-});
-
-// Unlockables routes
-router.get('/unlockables', async (req, res) => {
-  try {
-    const unlockables = await storage.getUnlockables();
-    res.json(unlockables);
-  } catch (error) {
-    console.error('Get unlockables error:', error);
-    res.status(500).json({ error: 'Failed to fetch unlockables' });
-  }
-});
-
-router.get('/user-unlockables', requireAuth, async (req, res) => {
-  try {
-    const userUnlockables = await storage.getUserUnlockables(req.user!.id);
-    res.json(userUnlockables);
-  } catch (error) {
-    console.error('Get user unlockables error:', error);
-    res.status(500).json({ error: 'Failed to fetch user unlockables' });
-  }
-});
-
-router.post('/unlock', requireAuth, async (req, res) => {
-  try {
-    const { unlockableId } = req.body;
-
-    // Get unlockable details
-    const unlockables = await storage.getUnlockables();
-    const unlockable = unlockables.find(u => u.id === unlockableId);
-
-    if (!unlockable) {
-      return res.status(404).json({ error: 'Unlockable not found' });
-    }
-
-    // Check if user has enough XP
-    const profile = await storage.getProfile(req.user!.id);
-    if (!profile || profile.xp < unlockable.xp_cost) {
-      return res.status(400).json({ error: 'Insufficient XP' });
-    }
-
-    // Check if already unlocked
-    const userUnlockables = await storage.getUserUnlockables(req.user!.id);
-    const alreadyUnlocked = userUnlockables.some(u => u.unlockable_id === unlockableId);
-
-    if (alreadyUnlocked) {
-      return res.status(400).json({ error: 'Already unlocked' });
-    }
-
-    // Create unlock record
-    const userUnlockableData: InsertUserUnlockable = {
-      user_id: req.user!.id,
-      unlockable_id: unlockableId
-    };
-
-    const userUnlockable = await storage.createUserUnlockable(userUnlockableData);
-
-    // Deduct XP
-    const xpTransaction: InsertXpTransaction = {
-      user_id: req.user!.id,
-      amount: -unlockable.xp_cost,
-      type: 'spent',
-      reason: `Unlocked ${unlockable.name}`
-    };
-
-    await storage.createXpTransaction(xpTransaction);
-
-    // Update profile XP
-    const newXp = profile.xp - unlockable.xp_cost;
-    const newLevel = Math.floor(newXp / 100) + 1;
-
-    await storage.updateProfile(req.user!.id, {
-      xp: newXp,
-      level: newLevel
-    });
-
-    res.json({ userUnlockable, newXp, newLevel });
-  } catch (error) {
-    console.error('Unlock error:', error);
-    res.status(500).json({ error: 'Failed to unlock feature' });
-  }
-});
-
-// AI routes
-router.post('/generate-mindmap', optionalAuth, async (req, res) => {
-  try {
-    const { input, category } = req.body;
-
-    if (!input) {
-      return res.status(400).json({ error: 'Input is required' });
-    }
-
-    // Import OpenAI here to avoid loading it unless needed
-    const { OpenAI } = await import('openai');
-
-    if (!process.env.OPENAI_API_KEY) {
-      throw new Error('OpenAI API key not configured');
-    }
-
-    const openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-    });
-
-    const categoryPrompts = {
-      notes: "Convert these notes into a clear, hierarchical mind map structure",
-      project: "Organize this project idea into a structured mind map with phases and tasks",
-      app: "Structure this app concept into a development-focused mind map",
-      brainstorming: "Expand and organize these brainstorming ideas into a creative mind map",
-      learning: "Create a learning-focused mind map that breaks down this topic",
-      default: "Convert this input into a well-organized mind map structure"
-    };
-
-    const prompt = `${categoryPrompts[category as keyof typeof categoryPrompts] || categoryPrompts.default}:
-
-"${input}"
-
-Return a JSON object with this exact structure:
-{
-  "title": "Main topic title",
-  "children": [
-    {
-      "title": "Subtopic 1",
-      "children": [
-        {
-          "title": "Detail 1.1",
-          "children": []
-        },
-        {
-          "title": "Detail 1.2", 
-          "children": []
-        }
-      ]
-    },
-    {
-      "title": "Subtopic 2",
-      "children": [
-        {
-          "title": "Detail 2.1",
-          "children": []
-        }
-      ]
-    }
-  ]
 }
 
-Keep it focused and not too deep (max 3 levels). Return only valid JSON.`;
+export async function registerRoutes(app: Express): Promise<Server> {
+  // Session configuration
+  app.use(session({
+    secret: process.env.SESSION_SECRET || 'development-secret-key',
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: false, // Set to true in production with HTTPS
+      httpOnly: true,
+      maxAge: 1000 * 60 * 60 * 24 * 7 // 1 week
+    }
+  }));
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content: "You are a mind map generation expert. Always return valid JSON in the exact format requested."
-        },
-        {
-          role: "user",
-          content: prompt
-        }
-      ],
-      temperature: 0.7,
-      max_tokens: 1000,
+  // Middleware to check authentication
+  const requireAuth = (req: any, res: any, next: any) => {
+    if (!req.session.userId) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    next();
+  };
+
+  // Auth routes
+  app.post('/api/auth/signup', async (req, res) => {
+    try {
+      const { username, email, password } = insertUserSchema.parse(req.body);
+      
+      // Check if user already exists
+      const existingUser = await storage.getUserByEmail(email);
+      if (existingUser) {
+        return res.status(400).json({ error: 'User already exists' });
+      }
+
+      // Hash password
+      const hashedPassword = await bcrypt.hash(password, 10);
+      
+      // Create user
+      const user = await storage.createUser({
+        username,
+        email,
+        password: hashedPassword
+      });
+
+      // Create profile
+      await storage.createProfile({
+        user_id: user.id,
+        username,
+        email,
+      });
+
+      req.session.userId = user.id;
+      res.json({ user: { id: user.id, username: user.username, email: user.email } });
+    } catch (error) {
+      console.error('Signup error:', error);
+      res.status(400).json({ error: 'Signup failed' });
+    }
+  });
+
+  app.post('/api/auth/signin', async (req, res) => {
+    try {
+      const { email, password } = req.body;
+      
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        return res.status(401).json({ error: 'Invalid credentials' });
+      }
+
+      const validPassword = await bcrypt.compare(password, user.password);
+      if (!validPassword) {
+        return res.status(401).json({ error: 'Invalid credentials' });
+      }
+
+      req.session.userId = user.id;
+      res.json({ user: { id: user.id, username: user.username, email: user.email } });
+    } catch (error) {
+      console.error('Signin error:', error);
+      res.status(400).json({ error: 'Signin failed' });
+    }
+  });
+
+  app.post('/api/auth/signout', (req, res) => {
+    req.session.destroy((err) => {
+      if (err) {
+        return res.status(500).json({ error: 'Signout failed' });
+      }
+      res.json({ message: 'Signed out successfully' });
     });
+  });
 
-    const content = completion.choices[0]?.message?.content;
-    if (!content) {
-      throw new Error('No response from OpenAI');
+  app.get('/api/auth/session', async (req, res) => {
+    if (!req.session.userId) {
+      return res.json({ user: null });
     }
 
+    const user = await storage.getUser(req.session.userId);
+    if (!user) {
+      return res.json({ user: null });
+    }
+
+    res.json({ user: { id: user.id, username: user.username, email: user.email } });
+  });
+
+  // Profile routes
+  app.get('/api/profile', requireAuth, async (req, res) => {
     try {
-      const mindMapData = JSON.parse(content);
-      res.json(mindMapData);
-    } catch (parseError) {
-      console.error('Failed to parse OpenAI response:', content);
-      // Return a fallback mind map
-      res.json({
-        title: input.slice(0, 50) + (input.length > 50 ? '...' : ''),
-        children: [
+      const profile = await storage.getProfile(req.session.userId!);
+      res.json(profile);
+    } catch (error) {
+      console.error('Get profile error:', error);
+      res.status(500).json({ error: 'Failed to get profile' });
+    }
+  });
+
+  app.post('/api/profile/award-xp', requireAuth, async (req, res) => {
+    try {
+      const { amount, reason, mindmapId } = req.body;
+      const userId = req.session.userId!;
+
+      // Create XP transaction
+      await storage.createXpTransaction({
+        user_id: userId,
+        amount,
+        type: 'earned',
+        reason,
+        mindmap_id: mindmapId || null
+      });
+
+      // Update profile XP
+      const profile = await storage.getProfile(userId);
+      if (!profile) {
+        return res.status(404).json({ error: 'Profile not found' });
+      }
+
+      const newXP = profile.xp + amount;
+      const newLevel = Math.floor(newXP / 100) + 1;
+
+      const updatedProfile = await storage.updateProfile(userId, {
+        xp: newXP,
+        level: newLevel
+      });
+
+      res.json(updatedProfile);
+    } catch (error) {
+      console.error('Award XP error:', error);
+      res.status(500).json({ error: 'Failed to award XP' });
+    }
+  });
+
+  app.post('/api/profile/spend-xp', requireAuth, async (req, res) => {
+    try {
+      const { amount, reason } = req.body;
+      const userId = req.session.userId!;
+
+      const profile = await storage.getProfile(userId);
+      if (!profile || profile.xp < amount) {
+        return res.status(400).json({ error: 'Insufficient XP' });
+      }
+
+      // Create XP transaction
+      await storage.createXpTransaction({
+        user_id: userId,
+        amount,
+        type: 'spent',
+        reason
+      });
+
+      // Update profile XP
+      const newXP = profile.xp - amount;
+      const updatedProfile = await storage.updateProfile(userId, { xp: newXP });
+
+      res.json({ success: true, profile: updatedProfile });
+    } catch (error) {
+      console.error('Spend XP error:', error);
+      res.status(500).json({ error: 'Failed to spend XP' });
+    }
+  });
+
+  // Mindmap routes
+  app.get('/api/mindmaps', requireAuth, async (req, res) => {
+    try {
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
+      const mindmaps = await storage.getMindmaps(req.session.userId!, limit);
+      res.json(mindmaps);
+    } catch (error) {
+      console.error('Get mindmaps error:', error);
+      res.status(500).json({ error: 'Failed to get mindmaps' });
+    }
+  });
+
+  app.post('/api/mindmaps', requireAuth, async (req, res) => {
+    try {
+      const mindmapData = insertMindmapSchema.parse({
+        ...req.body,
+        user_id: req.session.userId!
+      });
+      
+      const mindmap = await storage.createMindmap(mindmapData);
+      res.json(mindmap);
+    } catch (error) {
+      console.error('Create mindmap error:', error);
+      res.status(500).json({ error: 'Failed to create mindmap' });
+    }
+  });
+
+  app.delete('/api/mindmaps/:id', requireAuth, async (req, res) => {
+    try {
+      const success = await storage.deleteMindmap(req.params.id, req.session.userId!);
+      if (!success) {
+        return res.status(404).json({ error: 'Mindmap not found' });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Delete mindmap error:', error);
+      res.status(500).json({ error: 'Failed to delete mindmap' });
+    }
+  });
+
+  // Unlockables routes
+  app.get('/api/unlockables', async (req, res) => {
+    try {
+      const unlockables = await storage.getUnlockables();
+      res.json(unlockables);
+    } catch (error) {
+      console.error('Get unlockables error:', error);
+      res.status(500).json({ error: 'Failed to get unlockables' });
+    }
+  });
+
+  app.get('/api/user-unlockables', requireAuth, async (req, res) => {
+    try {
+      const userUnlockables = await storage.getUserUnlockables(req.session.userId!);
+      res.json(userUnlockables);
+    } catch (error) {
+      console.error('Get user unlockables error:', error);
+      res.status(500).json({ error: 'Failed to get user unlockables' });
+    }
+  });
+
+  app.post('/api/unlock-item', requireAuth, async (req, res) => {
+    try {
+      const { unlockableId } = req.body;
+      const userId = req.session.userId!;
+
+      // Get unlockable info
+      const unlockables = await storage.getUnlockables();
+      const unlockable = unlockables.find(u => u.id === unlockableId);
+      if (!unlockable) {
+        return res.status(404).json({ error: 'Unlockable not found' });
+      }
+
+      // Check if already unlocked
+      const userUnlockables = await storage.getUserUnlockables(userId);
+      if (userUnlockables.some(u => u.unlockable_id === unlockableId)) {
+        return res.status(400).json({ error: 'Already unlocked' });
+      }
+
+      // Check if user has enough XP
+      const profile = await storage.getProfile(userId);
+      if (!profile || profile.xp < unlockable.xp_cost) {
+        return res.status(400).json({ error: 'Not enough XP' });
+      }
+
+      // Spend XP
+      await storage.createXpTransaction({
+        user_id: userId,
+        amount: unlockable.xp_cost,
+        type: 'spent',
+        reason: unlockable.name
+      });
+
+      // Update profile XP
+      const newXP = profile.xp - unlockable.xp_cost;
+      await storage.updateProfile(userId, { xp: newXP });
+
+      // Unlock item
+      const userUnlockable = await storage.createUserUnlockable({
+        user_id: userId,
+        unlockable_id: unlockableId
+      });
+
+      res.json(userUnlockable);
+    } catch (error) {
+      console.error('Unlock item error:', error);
+      res.status(500).json({ error: 'Failed to unlock item' });
+    }
+  });
+
+  // AI routes (replacing Supabase Edge Functions)
+  app.post('/api/generate-mindmap', async (req, res) => {
+    try {
+      const { text, category } = req.body;
+
+      if (!text) {
+        return res.status(400).json({ error: 'No text provided' });
+      }
+
+      const categoryPrompts = {
+        'notes for a class': 'Create a mind map for academic notes with main topics, subtopics, key concepts, and detailed explanations. Focus on learning objectives and knowledge hierarchy.',
+        'project idea': 'Create a mind map for a project with phases, deliverables, resources needed, timeline, and key stakeholders. Focus on project planning and execution.',
+        'full stack app MVP': 'Create a mind map for an app MVP with features, tech stack, user flows, database design, API endpoints, and deployment strategy. Focus on technical architecture.',
+        'brainstorming': 'Create a mind map for brainstorming with main themes, creative ideas, connections between concepts, and potential solutions. Focus on idea generation and exploration.',
+        'problem solving': 'Create a mind map for problem solving with problem definition, root causes, potential solutions, evaluation criteria, and implementation steps. Focus on systematic analysis.',
+        'other': 'Create a comprehensive mind map that organizes the information into logical categories and subcategories.'
+      };
+
+      const specificPrompt = categoryPrompts[category as keyof typeof categoryPrompts] || categoryPrompts.other;
+
+      const prompt = `${specificPrompt}
+
+Input text: "${text}"
+
+Create a JSON response with a "nodes" array. Each node should have:
+- id: unique identifier (string)
+- text: short, clear label (max 25 characters)
+- x: x coordinate (number)
+- y: y coordinate (number)  
+- level: hierarchy level (0 for center, 1 for main branches, 2 for sub-branches)
+- children: array of child node IDs
+
+Layout the nodes in a radial pattern around a central node at (400, 200). Main branches should be 150px from center, sub-branches 80px from their parent. Distribute evenly in a circle.
+
+Return only the JSON object with the nodes array. No other text.`;
+
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [
+            {
+              role: 'system',
+              content: 'You are a mind mapping expert. Create well-structured, organized mind maps based on user input and category.'
+            },
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+          temperature: 0.7,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`OpenAI API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const content = data.choices[0].message.content;
+      
+      try {
+        const mindMapData = JSON.parse(content);
+        res.json(mindMapData);
+      } catch (parseError) {
+        // Fallback if AI doesn't return valid JSON
+        const fallbackNodes = [
           {
-            title: "Key Points",
-            children: [
-              { title: "Point 1", children: [] },
-              { title: "Point 2", children: [] }
-            ]
+            id: 'central',
+            text: text.substring(0, 25),
+            x: 400,
+            y: 200,
+            level: 0,
+            children: ['branch-1', 'branch-2']
           },
           {
-            title: "Next Steps",
-            children: [
-              { title: "Action 1", children: [] },
-              { title: "Action 2", children: [] }
-            ]
+            id: 'branch-1',
+            text: 'Main Idea 1',
+            x: 550,
+            y: 150,
+            level: 1,
+            children: []
+          },
+          {
+            id: 'branch-2',
+            text: 'Main Idea 2',
+            x: 250,
+            y: 250,
+            level: 1,
+            children: []
           }
-        ]
-      });
+        ];
+        
+        res.json({ nodes: fallbackNodes });
+      }
+    } catch (error) {
+      console.error('Generate mindmap error:', error);
+      res.status(500).json({ error: 'Failed to generate mindmap' });
     }
-  } catch (error) {
-    console.error('Generate mindmap error:', error);
-    res.status(500).json({ error: 'Failed to generate mindmap' });
-  }
-});
+  });
 
-router.post('/chat', requireAuth, async (req, res) => {
-  try {
-    const { message, mindmapData } = req.body;
-
-    if (!message) {
-      return res.status(400).json({ error: 'Message is required' });
-    }
-
-    // Import OpenAI here to avoid loading it unless needed
-    const { OpenAI } = await import('openai');
-
-    if (!process.env.OPENAI_API_KEY) {
-      throw new Error('OpenAI API key not configured');
-    }
-
-    const openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-    });
-
-    const prompt = `You are an AI assistant helping to modify mind maps. 
-Current mind map: ${JSON.stringify(mindmapData, null, 2)}
-
-User request: "${message}"
-
-Please provide a modified version of the mind map based on the user's request. Return only valid JSON in this exact format:
-{
-  "title": "Main topic title",
-  "children": [...]
-}`;
-
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content: "You are a mind map modification expert. Always return valid JSON."
-        },
-        {
-          role: "user",
-          content: prompt
-        }
-      ],
-      temperature: 0.7,
-      max_tokens: 1000,
-    });
-
-    const content = completion.choices[0]?.message?.content;
-    if (!content) {
-      throw new Error('No response from OpenAI');
-    }
-
+  app.post('/api/chat-assistant', async (req, res) => {
     try {
-      const modifiedMindMap = JSON.parse(content);
-      res.json({ mindmap: modifiedMindMap });
-    } catch (parseError) {
-      console.error('Failed to parse OpenAI response:', content);
-      res.status(500).json({ error: 'Failed to parse AI response' });
-    }
-  } catch (error) {
-    console.error('Chat error:', error);
-    res.status(500).json({ error: 'Failed to process chat message' });
-  }
-});
+      const { message, mindMapNodes, conversationHistory } = req.body;
 
-export default router;
+      if (!message) {
+        return res.status(400).json({ error: 'No message provided' });
+      }
+
+      const systemPrompt = `You are a helpful mind mapping assistant. You help users modify and improve their mind maps through natural conversation.
+
+Current mind map structure:
+${JSON.stringify(mindMapNodes, null, 2)}
+
+Instructions:
+- Speak naturally and conversationally, like a friendly assistant
+- NEVER use technical terms like "branch-1" or "node-2" 
+- When the user asks to modify the mind map, respond with the updated structure
+- For mind map changes, include a JSON object at the end of your response with the key "updatedMindMap" containing the new nodes array
+- Keep mind map node text short (max 25 characters)
+- Maintain the same coordinate layout patterns (central node at 400,200, branches radially distributed)
+- Be helpful and encouraging
+
+Remember: You're helping someone organize their thoughts, not teaching them technical concepts.`;
+
+      const messages = [
+        { role: 'system', content: systemPrompt },
+        ...conversationHistory,
+        { role: 'user', content: message }
+      ];
+
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: messages,
+          temperature: 0.8,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`OpenAI API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const assistantResponse = data.choices[0].message.content;
+
+      // Check if response contains mind map updates
+      let updatedMindMap = null;
+      try {
+        const jsonMatch = assistantResponse.match(/\{[\s\S]*"updatedMindMap"[\s\S]*\}/);
+        if (jsonMatch) {
+          const jsonData = JSON.parse(jsonMatch[0]);
+          updatedMindMap = jsonData.updatedMindMap;
+        }
+      } catch (parseError) {
+        // No JSON found, that's okay
+      }
+
+      res.json({
+        response: assistantResponse,
+        updatedMindMap
+      });
+    } catch (error) {
+      console.error('Chat assistant error:', error);
+      res.status(500).json({ error: 'Failed to process chat message' });
+    }
+  });
+
+  // Initialize database with seed data
+  await storage.seedUnlockables();
+
+  const httpServer = createServer(app);
+  return httpServer;
+}

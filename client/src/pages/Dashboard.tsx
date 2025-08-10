@@ -1,6 +1,6 @@
 import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
-import { Plus, FileText, Calendar, Trash2, Brain, BookOpen, Target } from "lucide-react";
+import { Plus, FileText, Calendar, Trash2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
@@ -33,11 +33,8 @@ const Dashboard = () => {
   }, [user, loading, setLocation]);
 
   const fetchMindmaps = async () => {
-    setLoadingMindmaps(true);
     try {
-      const response = await fetch('/api/mindmaps?limit=6', {
-        headers: getAuthHeaders()
-      });
+      const response = await fetch('/api/mindmaps?limit=6');
       if (response.ok) {
         const data = await response.json();
         setMindmaps(data);
@@ -52,64 +49,10 @@ const Dashboard = () => {
     }
   };
 
-  const getAuthHeaders = () => {
-    const token = localStorage.getItem('supabase_token');
-    return token ? { 'Authorization': `Bearer ${token}` } : {};
-  };
-
-  const generateQuiz = async (mindmapId: string) => {
-    try {
-      const response = await fetch('/api/quiz/generate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeaders()
-        },
-        body: JSON.stringify({ mindmapId, questionCount: 10 })
-      });
-
-      if (response.ok) {
-        const quiz = await response.json();
-        setLocation(`/quiz/${quiz.id}`);
-        toast.success("Quiz generated successfully!");
-      } else {
-        toast.error("Failed to generate quiz");
-      }
-    } catch (error) {
-      console.error('Error generating quiz:', error);
-      toast.error("Failed to generate quiz");
-    }
-  };
-
-  const generateFlashcards = async (mindmapId: string) => {
-    try {
-      const response = await fetch('/api/flashcards/generate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeaders()
-        },
-        body: JSON.stringify({ mindmapId, cardCount: 20 })
-      });
-
-      if (response.ok) {
-        const flashcards = await response.json();
-        setLocation(`/flashcards/${flashcards.id}`);
-        toast.success("Flashcards generated successfully!");
-      } else {
-        toast.error("Failed to generate flashcards");
-      }
-    } catch (error) {
-      console.error('Error generating flashcards:', error);
-      toast.error("Failed to generate flashcards");
-    }
-  };
-
   const deleteMindMap = async (id: string) => {
     try {
       const response = await fetch(`/api/mindmaps/${id}`, {
         method: 'DELETE',
-        headers: getAuthHeaders()
       });
 
       if (response.ok) {

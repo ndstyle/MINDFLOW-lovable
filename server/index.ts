@@ -1,6 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
+import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
-import router from "./routes";
 
 const app = express();
 app.use(express.json());
@@ -37,8 +37,7 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  // Set up API routes
-  app.use('/api', router);
+  const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
@@ -52,7 +51,7 @@ app.use((req, res, next) => {
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
   if (app.get("env") === "development") {
-    await setupVite(app);
+    await setupVite(app, server);
   } else {
     serveStatic(app);
   }
@@ -61,7 +60,11 @@ app.use((req, res, next) => {
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
   const port = 5000;
-  app.listen(port, "0.0.0.0", () => {
+  server.listen({
+    port,
+    host: "0.0.0.0",
+    reusePort: true,
+  }, () => {
     log(`serving on port ${port}`);
   });
 })();
