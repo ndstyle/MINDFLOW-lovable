@@ -90,6 +90,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signUp = async (email: string, password: string, username: string) => {
     try {
+      // First validate password length
+      if (password.length < 6) {
+        throw new Error('Password must be at least 6 characters long');
+      }
+
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -101,36 +106,66 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       });
 
       if (error) {
+        if (error.message.includes('weak_password')) {
+          throw new Error('Password must be at least 6 characters long');
+        }
         throw error;
       }
 
-      // Create profile if user was created
+      // Handle different signup scenarios
       if (data.user && !data.session) {
-        // User needs to confirm email
+        // Email confirmation required
         throw new Error('Please check your email to confirm your account');
       }
 
       if (data.user && data.session) {
         // User signed up successfully and is logged in
-        // Create profile record
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .insert({
-            id: data.user.id,
-            username,
-            xp: 0,
-            level: 1,
-          });
+        console.log('User signed up successfully, creating profile for:', data.user.id, 'with username:', username);
+        
+        // Create profile record using the authenticated user's session
+        try {
+          const { data: insertData, error: profileError } = await supabase
+            .from('profiles')
+            .insert({
+              id: data.user.id,
+              username,
+              xp: 0,
+              level: 1,
+            })
+            .select();
 
-        if (profileError) {
-          console.error('Profile creation error:', profileError);
-          // Don't throw here as user is already created
+          if (profileError) {
+            console.error('Profile creation error:', profileError);
+            console.error('Profile error details:', JSON.stringify(profileError, null, 2));
+            throw new Error(`Failed to create profile: ${profileError.message}`);
+          }
+          
+          console.log('Profile created successfully:', insertData);
+        } catch (profileErr) {
+          console.error('Profile creation failed:', profileErr);
+          throw new Error('Failed to create user profile. Please try again.');
         }
       }
 
       // Profile will be fetched automatically via auth state change
     } catch (error: any) {
       console.error('Sign up error:', error);
+      console.error('Error details:', JSON.stringify(error, null, 2));
+      
+      // Provide user-friendly error messages
+      if (error.message.includes('weak_password') || error.code === 'weak_password') {
+        throw new Error('Password must be at least 6 characters long');
+      }
+      if (error.message.includes('User already registered')) {
+        throw new Error('An account with this email already exists');
+      }
+      if (error.code === 'unexpected_failure') {
+        throw new Error('Database connection error. The database tables may not exist yet. Please set up your Supabase database with the required tables first.');
+      }
+      if (error.message.includes('Failed to create profile')) {
+        throw new Error('User account created but profile setup failed. This might be due to missing database tables or permissions.');
+      }
+      
       throw new Error(error.message || 'Failed to sign up');
     }
   };

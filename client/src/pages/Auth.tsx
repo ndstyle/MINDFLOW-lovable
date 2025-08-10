@@ -153,8 +153,9 @@ const Auth = () => {
                         type="password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        placeholder="create a password"
+                        placeholder="create a password (min 6 characters)"
                         required
+                        minLength={6}
                         className="lowercase placeholder:lowercase"
                       />
                     </div>
