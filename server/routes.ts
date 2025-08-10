@@ -321,7 +321,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         throw new Error('No content generated');
       }
 
-      const mindmapData = JSON.parse(content);
+      // Clean up the response if it contains markdown code blocks
+      let cleanContent = content;
+      if (cleanContent.includes('```json')) {
+        cleanContent = cleanContent.replace(/```json\n?/g, '').replace(/```\n?/g, '');
+      }
+      if (cleanContent.includes('```')) {
+        cleanContent = cleanContent.replace(/```/g, '');
+      }
+      
+      const mindmapData = JSON.parse(cleanContent);
       res.json(mindmapData);
     } catch (error) {
       console.error('Generate mindmap error:', error);

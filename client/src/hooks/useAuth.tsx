@@ -122,8 +122,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // User signed up successfully and is logged in
         console.log('User signed up successfully, creating profile for:', data.user.id, 'with username:', username);
         
-        // Create profile record using the authenticated user's session
-        try {
+        // Check if profile already exists (might be created by trigger)
+        const { data: existingProfile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', data.user.id)
+          .single();
+
+        if (!existingProfile) {
+          // Create profile record manually if trigger didn't work
           const { data: insertData, error: profileError } = await supabase
             .from('profiles')
             .insert({
@@ -136,14 +143,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
           if (profileError) {
             console.error('Profile creation error:', profileError);
-            console.error('Profile error details:', JSON.stringify(profileError, null, 2));
-            throw new Error(`Failed to create profile: ${profileError.message}`);
+            if (profileError.code === '23505') {
+              // Profile already exists (race condition with trigger)
+              console.log('Profile already exists, continuing...');
+            } else {
+              throw new Error(`Failed to create profile: ${profileError.message}`);
+            }
+          } else {
+            console.log('Profile created successfully:', insertData);
           }
-          
-          console.log('Profile created successfully:', insertData);
-        } catch (profileErr) {
-          console.error('Profile creation failed:', profileErr);
-          throw new Error('Failed to create user profile. Please try again.');
+        } else {
+          console.log('Profile already exists:', existingProfile);
         }
       }
 
