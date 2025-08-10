@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, createContext, useContext } from 'react';
 import { supabase, getSessionToken } from '../lib/supabase';
 import type { User } from '@supabase/supabase-js';
 
@@ -19,7 +19,30 @@ interface Profile {
   updated_at: string;
 }
 
+interface AuthContextType {
+  user: AuthUser | null;
+  profile: Profile | null;
+  loading: boolean;
+  signUp: (email: string, password: string, username?: string) => Promise<{ user: any; error: Error | null }>;
+  signIn: (email: string, password: string) => Promise<{ user: any; error: Error | null }>;
+  signOut: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
+}
+
+// Create the context
+export const AuthContext = createContext<AuthContextType | null>(null);
+
+// Custom hook to use the auth context
 export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};
+
+// Hook that provides the auth logic (to be used in the provider)
+export const useAuthHook = () => {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
