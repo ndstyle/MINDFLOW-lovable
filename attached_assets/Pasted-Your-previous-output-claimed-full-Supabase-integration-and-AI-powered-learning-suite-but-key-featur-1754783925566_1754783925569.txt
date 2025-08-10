@@ -1,0 +1,46 @@
+Your previous output claimed full Supabase integration and AI-powered learning suite, but key features are missing or incomplete: quizzes, flashcards, advanced interactive mindmaps, AI chat editing, collaboration, and gamification.
+
+NOW, you must:
+
+1. Fully build the **quiz system** like Quizlet/Knowt with:  
+   - AI-generated questions (MCQ, true/false, fill-in-the-blank, matching) from mindmap content  
+   - Interactive frontend UI with instant feedback, navigation controls, timers  
+   - XP awarding based on performance, progress tracking, achievement badges  
+   - Backend Supabase schema and APIs supporting quiz storage, grading, user attempts with RLS  
+
+2. Fully build the **flashcard system** with:  
+   - AI-generated flashcards linked to mindmaps  
+   - Flip animation, known/unknown tracking, XP rewards  
+   - Backend APIs and Supabase integration with strict access controls  
+
+3. Enhance **mindmap visualization** to be:  
+   - Visually appealing with drag-and-drop node repositioning and snap-to-grid  
+   - Animated edges and node hover highlights  
+   - Multiple node types with distinct colors and icons  
+   - Zoom and search to focus on nodes  
+
+4. Improve **AI chatbot** so it can:  
+   - Add/remove nodes via chat commands  
+   - Generate quizzes and flashcards for selected mindmap areas  
+   - Style nodes dynamically and sync changes to Supabase  
+
+5. Implement **collaboration features**:  
+   - Shareable session tokens with read/write permissions  
+   - Real-time updates syncing changes among collaborators  
+   - Frontend UI for sharing and joining sessions  
+
+6. Expand **gamification**:  
+   - Track achievements, streaks, quiz mastery  
+   - Unlock themes and features impacting UI and mindmap styles  
+
+7. Deliver all features with:  
+   - Complete frontend-backend integration using Supabase JS client and Express APIs  
+   - Strict RLS enforcement ensuring data privacy and security  
+   - Responsive, accessible UI with polished styling  
+   - Thorough testing with demo data, showing working quizzes, flashcards, and mindmaps  
+
+DO NOT produce placeholder UI or partial functionality. This must be a fully functional, user-ready learning platform matching the original specifications and feature requests.
+
+After implementation, generate a demo quiz and flashcard from a sample mindmap (e.g. “AP World”) and demonstrate interactive mindmap editing via chatbot commands.
+
+Proceed incrementally with clear commits, prioritizing user experience and integration correctness.

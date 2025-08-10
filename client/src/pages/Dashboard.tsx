@@ -33,6 +33,7 @@ const Dashboard = () => {
   }, [user, loading, setLocation]);
 
   const fetchMindmaps = async () => {
+    setLoadingMindmaps(true);
     try {
       const response = await fetch('/api/mindmaps?limit=6', {
         headers: getAuthHeaders()

@@ -546,4 +546,419 @@ import flashcardRouter from './routes/flashcards';
 router.use('/quiz', quizRouter);
 router.use('/flashcards', flashcardRouter);
 
+// Quiz routes
+router.post('/quizzes/generate', requireAuth, async (req, res) => {
+  try {
+    const { mindmapId } = req.body;
+    
+    if (!mindmapId) {
+      return res.status(400).json({ error: 'Mindmap ID is required' });
+    }
+
+    // Get the mindmap
+    const mindmap = await storage.getMindmap(mindmapId, req.user!.id);
+    if (!mindmap) {
+      return res.status(404).json({ error: 'Mindmap not found' });
+    }
+
+    // Generate quiz using OpenAI
+    const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are an educational AI that creates comprehensive quizzes from mind map content. Generate questions in multiple formats: multiple choice (4 options), true/false, and fill-in-the-blank. Return JSON with questions array.'
+          },
+          {
+            role: 'user',
+            content: `Create a quiz from this mind map about "${mindmap.title}". Content: ${JSON.stringify(mindmap.content)}. Generate 8-12 questions covering key concepts.`
+          }
+        ],
+        response_format: { type: 'json_object' }
+      })
+    });
+
+    if (!openaiResponse.ok) {
+      throw new Error('Failed to generate quiz');
+    }
+
+    const aiResponse = await openaiResponse.json();
+    const quizData = JSON.parse(aiResponse.choices[0].message.content);
+
+    // Save quiz to database
+    const { data: quiz, error } = await supabaseAdmin
+      .from('quizzes')
+      .insert({
+        mindmap_id: mindmapId,
+        user_id: req.user!.id,
+        questions: quizData.questions
+      })
+      .select()
+      .single();
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    // Award XP for quiz generation
+    await storage.createXpTransaction({
+      user_id: req.user!.id,
+      amount: 15,
+      type: 'quiz_generated',
+      reason: 'Generated quiz from mind map',
+      mindmap_id: mindmapId
+    });
+
+    res.json(quiz);
+  } catch (error) {
+    console.error('Generate quiz error:', error);
+    res.status(500).json({ error: 'Failed to generate quiz' });
+  }
+});
+
+router.get('/quizzes/:id', requireAuth, async (req, res) => {
+  try {
+    const { data: quiz, error } = await supabaseAdmin
+      .from('quizzes')
+      .select('*')
+      .eq('id', req.params.id)
+      .eq('user_id', req.user!.id)
+      .single();
+
+    if (error || !quiz) {
+      return res.status(404).json({ error: 'Quiz not found' });
+    }
+
+    res.json(quiz);
+  } catch (error) {
+    console.error('Get quiz error:', error);
+    res.status(500).json({ error: 'Failed to fetch quiz' });
+  }
+});
+
+router.post('/quizzes/:id/submit', requireAuth, async (req, res) => {
+  try {
+    const { answers, timeSpent } = req.body;
+    const quizId = req.params.id;
+
+    // Get quiz
+    const { data: quiz, error } = await supabaseAdmin
+      .from('quizzes')
+      .select('*')
+      .eq('id', quizId)
+      .eq('user_id', req.user!.id)
+      .single();
+
+    if (error || !quiz) {
+      return res.status(404).json({ error: 'Quiz not found' });
+    }
+
+    // Calculate score
+    const questions = quiz.questions;
+    let correctAnswers = 0;
+    
+    questions.forEach((question: any, index: number) => {
+      if (answers[index] === question.correct_answer) {
+        correctAnswers++;
+      }
+    });
+
+    const score = (correctAnswers / questions.length) * 100;
+    const xpEarned = Math.floor(score / 10) * 2; // 2 XP per 10% score
+
+    // Award XP
+    if (xpEarned > 0) {
+      await storage.createXpTransaction({
+        user_id: req.user!.id,
+        amount: xpEarned,
+        type: 'quiz_completed',
+        reason: `Completed quiz with ${score}% score`,
+        mindmap_id: quiz.mindmap_id
+      });
+    }
+
+    res.json({
+      score,
+      correctAnswers,
+      totalQuestions: questions.length,
+      xpEarned,
+      timeSpent
+    });
+  } catch (error) {
+    console.error('Submit quiz error:', error);
+    res.status(500).json({ error: 'Failed to submit quiz' });
+  }
+});
+
+// Flashcard routes
+router.post('/flashcards/generate', requireAuth, async (req, res) => {
+  try {
+    const { mindmapId } = req.body;
+    
+    if (!mindmapId) {
+      return res.status(400).json({ error: 'Mindmap ID is required' });
+    }
+
+    // Get the mindmap
+    const mindmap = await storage.getMindmap(mindmapId, req.user!.id);
+    if (!mindmap) {
+      return res.status(404).json({ error: 'Mindmap not found' });
+    }
+
+    // Generate flashcards using OpenAI
+    const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are an educational AI that creates flashcards from mind map content. Generate clear, concise flashcards with front (question/term) and back (answer/definition). Return JSON with cards array.'
+          },
+          {
+            role: 'user',
+            content: `Create flashcards from this mind map about "${mindmap.title}". Content: ${JSON.stringify(mindmap.content)}. Generate 10-15 flashcards covering key terms and concepts.`
+          }
+        ],
+        response_format: { type: 'json_object' }
+      })
+    });
+
+    if (!openaiResponse.ok) {
+      throw new Error('Failed to generate flashcards');
+    }
+
+    const aiResponse = await openaiResponse.json();
+    const flashcardData = JSON.parse(aiResponse.choices[0].message.content);
+
+    // Save flashcards to database
+    const { data: flashcards, error } = await supabaseAdmin
+      .from('flashcards')
+      .insert({
+        mindmap_id: mindmapId,
+        user_id: req.user!.id,
+        cards: flashcardData.cards
+      })
+      .select()
+      .single();
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    // Award XP for flashcard generation
+    await storage.createXpTransaction({
+      user_id: req.user!.id,
+      amount: 10,
+      type: 'flashcards_generated',
+      reason: 'Generated flashcards from mind map',
+      mindmap_id: mindmapId
+    });
+
+    res.json(flashcards);
+  } catch (error) {
+    console.error('Generate flashcards error:', error);
+    res.status(500).json({ error: 'Failed to generate flashcards' });
+  }
+});
+
+router.get('/flashcards/:id', requireAuth, async (req, res) => {
+  try {
+    const { data: flashcards, error } = await supabaseAdmin
+      .from('flashcards')
+      .select('*')
+      .eq('id', req.params.id)
+      .eq('user_id', req.user!.id)
+      .single();
+
+    if (error || !flashcards) {
+      return res.status(404).json({ error: 'Flashcards not found' });
+    }
+
+    res.json(flashcards);
+  } catch (error) {
+    console.error('Get flashcards error:', error);
+    res.status(500).json({ error: 'Failed to fetch flashcards' });
+  }
+});
+
+// AI Chat route for mindmap editing
+router.post('/mindmap-chat', requireAuth, async (req, res) => {
+  try {
+    const { mindmapId, message, mindMapNodes, conversationHistory } = req.body;
+
+    // Get mindmap
+    const mindmap = await storage.getMindmap(mindmapId, req.user!.id);
+    if (!mindmap) {
+      return res.status(404).json({ error: 'Mindmap not found' });
+    }
+
+    // Use OpenAI to process the chat message
+    const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: `You are an AI assistant that helps edit mind maps. You can:
+            1. Add new nodes to the mind map
+            2. Change node colors and properties
+            3. Suggest improvements
+            4. Generate quizzes or flashcards
+            
+            Current mindmap: ${JSON.stringify(mindMapNodes)}
+            
+            If the user requests changes to the mind map, respond with both a text explanation AND include "MINDMAP_UPDATE:" followed by the updated nodes array in JSON format.
+            
+            For other requests, just provide helpful text responses.`
+          },
+          ...conversationHistory,
+          {
+            role: 'user',
+            content: message
+          }
+        ]
+      })
+    });
+
+    if (!openaiResponse.ok) {
+      throw new Error('Failed to get AI response');
+    }
+
+    const aiResponse = await openaiResponse.json();
+    let responseText = aiResponse.choices[0].message.content;
+    let updatedMindMap = null;
+
+    // Check if AI provided mindmap updates
+    if (responseText.includes('MINDMAP_UPDATE:')) {
+      const parts = responseText.split('MINDMAP_UPDATE:');
+      responseText = parts[0].trim();
+      try {
+        updatedMindMap = JSON.parse(parts[1].trim());
+        
+        // Update mindmap in database
+        await storage.updateMindmap(mindmapId, req.user!.id, {
+          content: { nodes: updatedMindMap }
+        });
+      } catch (parseError) {
+        console.error('Error parsing mindmap update:', parseError);
+      }
+    }
+
+    res.json({
+      response: responseText,
+      updatedMindMap
+    });
+  } catch (error) {
+    console.error('AI chat error:', error);
+    res.status(500).json({ error: 'Failed to process chat message' });
+  }
+});
+
+// Collaboration routes
+router.post('/mindmaps/:id/share', requireAuth, async (req, res) => {
+  try {
+    const { permissions = 'read', expiresInDays = 7 } = req.body;
+    const mindmapId = req.params.id;
+
+    // Verify mindmap ownership
+    const mindmap = await storage.getMindmap(mindmapId, req.user!.id);
+    if (!mindmap) {
+      return res.status(404).json({ error: 'Mindmap not found' });
+    }
+
+    // Generate unique share token
+    const shareToken = Buffer.from(JSON.stringify({
+      mindmapId,
+      permissions,
+      createdBy: req.user!.id,
+      exp: Date.now() + (expiresInDays * 24 * 60 * 60 * 1000)
+    })).toString('base64');
+
+    // Save collaboration session
+    const { data: session, error } = await supabaseAdmin
+      .from('collab_sessions')
+      .insert({
+        mindmap_id: mindmapId,
+        session_token: shareToken,
+        permissions,
+        created_by: req.user!.id,
+        expires_at: new Date(Date.now() + (expiresInDays * 24 * 60 * 60 * 1000))
+      })
+      .select()
+      .single();
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    res.json({
+      shareToken,
+      shareUrl: `${process.env.CLIENT_URL || 'http://localhost:5000'}/collaborate/${shareToken}`,
+      permissions,
+      expiresAt: session.expires_at
+    });
+  } catch (error) {
+    console.error('Share mindmap error:', error);
+    res.status(500).json({ error: 'Failed to create share link' });
+  }
+});
+
+router.get('/collaborate/:token', optionalAuth, async (req, res) => {
+  try {
+    const token = req.params.token;
+
+    // Verify collaboration session
+    const { data: session, error } = await supabaseAdmin
+      .from('collab_sessions')
+      .select('*')
+      .eq('session_token', token)
+      .single();
+
+    if (error || !session) {
+      return res.status(404).json({ error: 'Invalid or expired share link' });
+    }
+
+    // Check if expired
+    if (new Date() > new Date(session.expires_at)) {
+      return res.status(410).json({ error: 'Share link has expired' });
+    }
+
+    // Get mindmap (with basic access since this is a shared link)
+    const { data: mindmap, error: mindmapError } = await supabaseAdmin
+      .from('mindmaps')
+      .select('*')
+      .eq('id', session.mindmap_id)
+      .single();
+
+    if (mindmapError || !mindmap) {
+      return res.status(404).json({ error: 'Mindmap not found' });
+    }
+
+    res.json({
+      mindmap,
+      permissions: session.permissions,
+      canEdit: session.permissions === 'write'
+    });
+  } catch (error) {
+    console.error('Get collaboration error:', error);
+    res.status(500).json({ error: 'Failed to access shared mindmap' });
+  }
+});
+
 export default router;

@@ -66,6 +66,66 @@ export class SupabaseStorage implements IStorage {
     return data;
   }
 
+  // Quiz operations
+  async createQuiz(quiz: any): Promise<any> {
+    const { data, error } = await supabaseAdmin
+      .from('quizzes')
+      .insert(quiz)
+      .select()
+      .single();
+    
+    if (error) {
+      throw new Error(`Failed to create quiz: ${error.message}`);
+    }
+    
+    return data;
+  }
+
+  async getQuiz(id: string, userId: string): Promise<any> {
+    const { data, error } = await supabaseAdmin
+      .from('quizzes')
+      .select('*')
+      .eq('id', id)
+      .eq('user_id', userId)
+      .single();
+    
+    if (error) {
+      throw new Error(`Failed to fetch quiz: ${error.message}`);
+    }
+    
+    return data;
+  }
+
+  // Flashcard operations
+  async createFlashcards(flashcards: any): Promise<any> {
+    const { data, error } = await supabaseAdmin
+      .from('flashcards')
+      .insert(flashcards)
+      .select()
+      .single();
+    
+    if (error) {
+      throw new Error(`Failed to create flashcards: ${error.message}`);
+    }
+    
+    return data;
+  }
+
+  async getFlashcards(id: string, userId: string): Promise<any> {
+    const { data, error } = await supabaseAdmin
+      .from('flashcards')
+      .select('*')
+      .eq('id', id)
+      .eq('user_id', userId)
+      .single();
+    
+    if (error) {
+      throw new Error(`Failed to fetch flashcards: ${error.message}`);
+    }
+    
+    return data;
+  }
+
   async updateProfile(userId: string, updates: UpdateProfile): Promise<Profile> {
     const { data, error } = await supabaseAdmin
       .from('profiles')
@@ -190,7 +250,7 @@ export class SupabaseStorage implements IStorage {
     const { data, error } = await supabaseAdmin
       .from('unlockables')
       .select('*')
-      .order('created_at', { ascending: true });
+      .order('xp_cost', { ascending: true });
     
     if (error) {
       throw new Error(`Failed to fetch unlockables: ${error.message}`);
