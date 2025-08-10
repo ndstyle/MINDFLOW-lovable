@@ -1,0 +1,113 @@
+You are Replit AI working on the Mindflow project.
+
+Mindflow is a React + TypeScript frontend with an Express backend, using Supabase exclusively for authentication, user management, and database storage.
+
+IMPORTANT: Here is the database schema (Supabase `public` schema) to use as ground truth — all code must remain consistent with it:
+
+CREATE TABLE public.collab_sessions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  mindmap_id uuid,
+  session_token text NOT NULL UNIQUE,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT collab_sessions_pkey PRIMARY KEY (id),
+  CONSTRAINT collab_sessions_mindmap_id_fkey FOREIGN KEY (mindmap_id) REFERENCES public.mindmaps(id)
+);
+CREATE TABLE public.flashcards (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  mindmap_id uuid,
+  cards jsonb NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT flashcards_pkey PRIMARY KEY (id),
+  CONSTRAINT flashcards_mindmap_id_fkey FOREIGN KEY (mindmap_id) REFERENCES public.mindmaps(id)
+);
+CREATE TABLE public.mindmaps (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  owner_id uuid,
+  title text NOT NULL,
+  intent text CHECK (intent = ANY (ARRAY['study'::text, 'teach'::text, 'project'::text, 'brainstorm'::text, 'presentation'::text])),
+  content jsonb NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT mindmaps_pkey PRIMARY KEY (id),
+  CONSTRAINT mindmaps_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.profiles (
+  id uuid NOT NULL,
+  username text NOT NULL UNIQUE,
+  xp integer DEFAULT 0,
+  level integer DEFAULT 1,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT profiles_pkey PRIMARY KEY (id),
+  CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.quizzes (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  mindmap_id uuid,
+  questions jsonb NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT quizzes_pkey PRIMARY KEY (id),
+  CONSTRAINT quizzes_mindmap_id_fkey FOREIGN KEY (mindmap_id) REFERENCES public.mindmaps(id)
+);
+CREATE TABLE public.unlockables (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  name text NOT NULL UNIQUE,
+  type text CHECK (type = ANY (ARRAY['theme'::text, 'feature'::text])),
+  cost integer NOT NULL,
+  CONSTRAINT unlockables_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.user_unlockables (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  profile_id uuid,
+  unlockable_id uuid,
+  unlocked_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT user_unlockables_pkey PRIMARY KEY (id),
+  CONSTRAINT user_unlockables_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.profiles(id),
+  CONSTRAINT user_unlockables_unlockable_id_fkey FOREIGN KEY (unlockable_id) REFERENCES public.unlockables(id)
+);
+CREATE TABLE public.xp_transactions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  profile_id uuid,
+  amount integer NOT NULL,
+  reason text NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT xp_transactions_pkey PRIMARY KEY (id),
+  CONSTRAINT xp_transactions_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.profiles(id)
+);
+
+CURRENT ISSUE:
+We are getting "Database error creating new user" during signup. This is because the `profiles.id` column has a foreign key to `auth.users(id)`. Attempting to create a profile row before a Supabase Auth user record exists, or using an incorrect/mismatched UUID, will fail. Older non-Supabase auth logic may still exist.
+
+GOAL:
+1. Audit and refactor all backend and frontend user registration/login code so:
+   - Users are always created through `supabase.auth.signUp`.
+   - After a successful signup, immediately insert a matching row into `public.profiles` with the SAME `id` UUID returned from Supabase Auth.
+   - No legacy or local JWT-based auth remains — use Supabase Auth exclusively.
+   - All queries/mutations for user-specific data (mindmaps, XP, etc.) reference the authenticated user's ID from Supabase.
+
+2. Validate and fix:
+   - Backend routes that handle signup, login, and profile creation.
+   - Any user-related service functions.
+   - Frontend signup/login workflows to ensure they call the correct backend/auth APIs.
+
+3. Output:
+   a) List of files changed.
+   b) Exact diffs for each file (before/after).
+   c) Test SQL SELECT statements to verify correct linkage:
+      SELECT id FROM auth.users;
+      SELECT id, username FROM public.profiles;
+      -- IDs must match.
+   d) Manual QA checklist:
+      - Sign up a new user → verify in `auth.users` and `profiles`.
+      - Login and create content linked to the user.
+      - Duplicate usernames should be rejected.
+      - Invalid registration attempts should not create orphan profile rows.
+   e) Suggested commit message.
+
+CONSTRAINTS:
+- Do not break existing MVP features.
+- Only modify necessary files.
+- Keep Supabase as the single source of truth for auth and data.
+- TypeScript must compile cleanly and tests (if present) must pass.
+
+Begin now and provide file diffs, QA checklist, and commit message.
