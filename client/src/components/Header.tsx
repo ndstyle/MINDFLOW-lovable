@@ -7,7 +7,7 @@ import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 
-export const Header = () => {
+const Header = () => {
   const { user, signOut } = useAuth();
   const [location, setLocation] = useLocation();
   const [showUnlockables, setShowUnlockables] = useState(false);
@@ -97,4 +97,3 @@ export const Header = () => {
 };
 
 export default Header;
-export { Header };

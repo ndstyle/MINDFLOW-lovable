@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { FloatingParticles } from "@/components/FloatingParticles";
-import { Header } from "@/components/Header";
+import Header from "@/components/Header";
 import { InputArea } from "@/components/InputArea";
 import { MindMapVisualization } from "@/components/MindMapVisualization";
 import { CategorySelector } from "@/components/CategorySelector";

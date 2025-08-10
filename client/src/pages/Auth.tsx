@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Header } from "@/components/Header";
+import Header from "@/components/Header";
 import { useAuth } from "@/hooks/useAuth";
 
 const Auth = () => {
