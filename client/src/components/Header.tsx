@@ -29,35 +29,24 @@ const Header = () => {
       <div className="container mx-auto px-6 h-16 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2 text-xl font-bold lowercase">
           <Zap className="w-6 h-6 text-primary" />
-          mindflow
+          quicklearned
         </Link>
 
         <nav className="hidden md:flex items-center gap-6">
-          <Link href="/" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors lowercase">
+          <Link href={user ? "/dashboard" : "/"} className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors lowercase">
             home
           </Link>
           {user && (
             <>
-              <Link href="/dashboard" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors lowercase">
-                dashboard
+              <Link href="/library" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors lowercase">
+                library
               </Link>
-              <Link href="/history" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors lowercase">
-                history
+              <Link href="/upload" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors lowercase">
+                upload document
               </Link>
-              <Button 
-                variant="ghost" 
-                asChild
-                className="text-sm font-medium hover:text-primary transition-colors"
-              >
-                <Link href="/history">History</Link>
-              </Button>
-              <Button 
-                variant="ghost" 
-                asChild
-                className="text-sm font-medium hover:text-primary transition-colors"
-              >
-                <Link href="/library">Library</Link>
-              </Button>
+              <Link href="/create" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors lowercase">
+                create mind map
+              </Link>
             </>
           )}
         </nav>

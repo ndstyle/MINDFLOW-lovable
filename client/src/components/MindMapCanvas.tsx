@@ -1,242 +1,216 @@
-import { useEffect, useRef, useState } from 'react';
-import type { Node } from '../../../shared/schema';
+import React, { useRef, useEffect, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { ZoomIn, ZoomOut, Download, Maximize } from 'lucide-react';
+
+interface Node {
+  id: string;
+  title: string;
+  content: string;
+  level: number;
+  x?: number;
+  y?: number;
+  children?: string[];
+  parent?: string;
+}
 
 interface MindMapCanvasProps {
   nodes: Node[];
-  onNodeClick?: (node: Node) => void;
-  selectedNode?: Node | null;
-  showMastery?: boolean;
+  onNodeClick?: (nodeId: string) => void;
+  className?: string;
 }
 
-export function MindMapCanvas({ nodes, onNodeClick, selectedNode, showMastery = false }: MindMapCanvasProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [dragState, setDragState] = useState({ isDragging: false, lastX: 0, lastY: 0 });
-  const [viewState, setViewState] = useState({ x: 0, y: 0, scale: 1 });
+export function MindMapCanvas({ nodes, onNodeClick, className = "" }: MindMapCanvasProps) {
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 
-  useEffect(() => {
-    if (!canvasRef.current || !containerRef.current) return;
+  // Colors for different levels
+  const levelColors = [
+    'from-primary to-primary/80',
+    'from-accent to-accent/80', 
+    'from-secondary to-secondary/80',
+    'from-blue-500 to-blue-400',
+    'from-green-500 to-green-400',
+    'from-purple-500 to-purple-400'
+  ];
 
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+  // Calculate node positions if not provided
+  const positionedNodes = React.useMemo(() => {
+    if (nodes.length === 0) return [];
 
-    // Set canvas size
-    const container = containerRef.current;
-    const rect = container.getBoundingClientRect();
-    canvas.width = rect.width * devicePixelRatio;
-    canvas.height = rect.height * devicePixelRatio;
-    canvas.style.width = `${rect.width}px`;
-    canvas.style.height = `${rect.height}px`;
-    ctx.scale(devicePixelRatio, devicePixelRatio);
+    const positioned = [...nodes];
+    const centerX = 400;
+    const centerY = 300;
+    const levelGap = 150;
+    const nodeGap = 100;
 
-    // Clear canvas
-    ctx.clearRect(0, 0, rect.width, rect.height);
+    // Find root node (level 0)
+    const rootNode = positioned.find(n => n.level === 0);
+    if (rootNode && !rootNode.x && !rootNode.y) {
+      rootNode.x = centerX;
+      rootNode.y = centerY;
+    }
 
-    // Apply transforms
-    ctx.save();
-    ctx.translate(viewState.x + rect.width / 2, viewState.y + rect.height / 2);
-    ctx.scale(viewState.scale, viewState.scale);
-
-    // Draw connections first
-    ctx.strokeStyle = '#374151';
-    ctx.lineWidth = 2;
-    nodes.forEach(node => {
-      if (node.parent_id) {
-        const parent = nodes.find(n => n.id === node.parent_id);
-        if (parent) {
-          ctx.beginPath();
-          ctx.moveTo(parent.position_x, parent.position_y);
-          ctx.lineTo(node.position_x, node.position_y);
-          ctx.stroke();
-        }
-      }
-    });
-
-    // Draw nodes
-    nodes.forEach(node => {
-      const isSelected = selectedNode?.id === node.id;
-      const nodeSize = getNodeSize(node.level);
-      const nodeColor = getNodeColor(node.level, isSelected);
-
-      // Draw node background
-      ctx.fillStyle = nodeColor;
-      ctx.beginPath();
-      ctx.arc(node.position_x, node.position_y, nodeSize, 0, 2 * Math.PI);
-      ctx.fill();
-
-      // Draw border
-      ctx.strokeStyle = isSelected ? '#7c3aed' : '#e5e7eb';
-      ctx.lineWidth = isSelected ? 3 : 1;
-      ctx.stroke();
-
-      // Draw text
-      ctx.fillStyle = '#1f2937';
-      ctx.font = `${getNodeFontSize(node.level)}px Inter, sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
+    // Position nodes by level
+    for (let level = 1; level <= 3; level++) {
+      const levelNodes = positioned.filter(n => n.level === level);
+      const angleStep = (2 * Math.PI) / Math.max(levelNodes.length, 1);
       
-      // Wrap text for longer titles
-      const maxWidth = nodeSize * 1.8;
-      const words = node.title.split(' ');
-      const lines: string[] = [];
-      let currentLine = '';
-
-      words.forEach(word => {
-        const testLine = currentLine + (currentLine ? ' ' : '') + word;
-        const metrics = ctx.measureText(testLine);
-        if (metrics.width > maxWidth && currentLine) {
-          lines.push(currentLine);
-          currentLine = word;
-        } else {
-          currentLine = testLine;
+      levelNodes.forEach((node, index) => {
+        if (!node.x && !node.y) {
+          const angle = angleStep * index;
+          const radius = level * levelGap;
+          node.x = centerX + Math.cos(angle) * radius;
+          node.y = centerY + Math.sin(angle) * radius;
         }
       });
-      if (currentLine) lines.push(currentLine);
-
-      const lineHeight = getNodeFontSize(node.level) * 1.2;
-      const totalHeight = lines.length * lineHeight;
-      const startY = node.position_y - totalHeight / 2 + lineHeight / 2;
-
-      lines.forEach((line, index) => {
-        ctx.fillText(line, node.position_x, startY + index * lineHeight);
-      });
-    });
-
-    ctx.restore();
-  }, [nodes, selectedNode, viewState]);
-
-  const getNodeSize = (level: number): number => {
-    switch (level) {
-      case 0: return 60; // Topic
-      case 1: return 45; // Concept
-      case 2: return 30; // Leaf
-      default: return 30;
     }
-  };
 
-  const getNodeColor = (level: number, isSelected: boolean): string => {
-    if (isSelected) return '#ddd6fe';
-    switch (level) {
-      case 0: return '#fef3c7'; // Yellow for topics
-      case 1: return '#dbeafe'; // Blue for concepts
-      case 2: return '#dcfce7'; // Green for leaves
-      default: return '#f3f4f6';
-    }
-  };
-
-  const getNodeFontSize = (level: number): number => {
-    switch (level) {
-      case 0: return 14;
-      case 1: return 12;
-      case 2: return 10;
-      default: return 10;
-    }
-  };
+    return positioned;
+  }, [nodes]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
-    setDragState({ isDragging: true, lastX: e.clientX, lastY: e.clientY });
+    setIsDragging(true);
+    setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (!dragState.isDragging) return;
-
-    const deltaX = e.clientX - dragState.lastX;
-    const deltaY = e.clientY - dragState.lastY;
-
-    setViewState(prev => ({
-      ...prev,
-      x: prev.x + deltaX,
-      y: prev.y + deltaY
-    }));
-
-    setDragState(prev => ({ ...prev, lastX: e.clientX, lastY: e.clientY }));
-  };
-
-  const handleMouseUp = () => {
-    setDragState(prev => ({ ...prev, isDragging: false }));
-  };
-
-  const handleClick = (e: React.MouseEvent) => {
-    if (!canvasRef.current || !containerRef.current || !onNodeClick) return;
-
-    const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    const container = containerRef.current;
-    const containerRect = container.getBoundingClientRect();
-
-    // Convert screen coordinates to canvas coordinates
-    const x = (e.clientX - rect.left - containerRect.width / 2 - viewState.x) / viewState.scale;
-    const y = (e.clientY - rect.top - containerRect.height / 2 - viewState.y) / viewState.scale;
-
-    // Find clicked node
-    const clickedNode = nodes.find(node => {
-      const distance = Math.sqrt(
-        Math.pow(x - node.position_x, 2) + Math.pow(y - node.position_y, 2)
-      );
-      return distance <= getNodeSize(node.level);
-    });
-
-    if (clickedNode) {
-      onNodeClick(clickedNode);
+    if (isDragging) {
+      setPan({
+        x: e.clientX - dragStart.x,
+        y: e.clientY - dragStart.y
+      });
     }
   };
 
-  const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    const scaleFactor = e.deltaY > 0 ? 0.9 : 1.1;
-    setViewState(prev => ({
-      ...prev,
-      scale: Math.max(0.1, Math.min(3, prev.scale * scaleFactor))
-    }));
+  const handleMouseUp = () => {
+    setIsDragging(false);
   };
 
-  const resetView = () => {
-    setViewState({ x: 0, y: 0, scale: 1 });
+  const handleZoom = (delta: number) => {
+    setZoom(prev => Math.max(0.5, Math.min(3, prev + delta)));
+  };
+
+  const exportSVG = () => {
+    if (!svgRef.current) return;
+    
+    const svgData = new XMLSerializer().serializeToString(svgRef.current);
+    const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+    const svgUrl = URL.createObjectURL(svgBlob);
+    
+    const downloadLink = document.createElement('a');
+    downloadLink.href = svgUrl;
+    downloadLink.download = 'mindmap.svg';
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
+    URL.revokeObjectURL(svgUrl);
   };
 
   return (
-    <div 
-      ref={containerRef}
-      className="relative w-full h-96 border rounded-lg overflow-hidden bg-gray-50"
-    >
-      <canvas
-        ref={canvasRef}
-        className="absolute inset-0 cursor-grab active:cursor-grabbing"
+    <div className={`relative w-full h-96 border border-border rounded-lg overflow-hidden bg-background ${className}`}>
+      {/* Controls */}
+      <div className="absolute top-4 right-4 z-10 flex gap-2">
+        <Button size="sm" variant="outline" onClick={() => handleZoom(0.1)}>
+          <ZoomIn className="w-4 h-4" />
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => handleZoom(-0.1)}>
+          <ZoomOut className="w-4 h-4" />
+        </Button>
+        <Button size="sm" variant="outline" onClick={exportSVG}>
+          <Download className="w-4 h-4" />
+        </Button>
+      </div>
+
+      {/* SVG Canvas */}
+      <svg
+        ref={svgRef}
+        className="w-full h-full cursor-grab active:cursor-grabbing"
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
-        onClick={handleClick}
-        onWheel={handleWheel}
-      />
-      
-      {/* Controls */}
-      <div className="absolute top-4 right-4 flex gap-2">
-        <button
-          onClick={resetView}
-          className="px-3 py-1 bg-white border rounded text-sm hover:bg-gray-50"
-        >
-          Reset View
-        </button>
-      </div>
+        style={{ transform: `scale(${zoom}) translate(${pan.x}px, ${pan.y}px)` }}
+      >
+        <defs>
+          {levelColors.map((gradient, index) => (
+            <linearGradient key={index} id={`gradient-${index}`} x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor={`hsl(var(--primary))`} />
+              <stop offset="100%" stopColor={`hsl(var(--primary) / 0.8)`} />
+            </linearGradient>
+          ))}
+        </defs>
 
-      {/* Legend */}
-      <div className="absolute bottom-4 left-4 bg-white/90 p-3 rounded-lg border text-xs space-y-1">
-        <div className="font-medium">Node Types:</div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-yellow-200"></div>
-          <span>Topics</span>
+        {/* Connections */}
+        {positionedNodes.map(node => (
+          node.children?.map(childId => {
+            const child = positionedNodes.find(n => n.id === childId);
+            if (!child || !node.x || !node.y || !child.x || !child.y) return null;
+
+            return (
+              <line
+                key={`${node.id}-${childId}`}
+                x1={node.x}
+                y1={node.y}
+                x2={child.x}
+                y2={child.y}
+                stroke="hsl(var(--border))"
+                strokeWidth="2"
+                opacity="0.6"
+              />
+            );
+          }) || []
+        ))}
+
+        {/* Nodes */}
+        {positionedNodes.map((node, index) => {
+          if (!node.x || !node.y) return null;
+
+          const colorIndex = Math.min(node.level, levelColors.length - 1);
+          
+          return (
+            <g key={node.id}>
+              {/* Node background */}
+              <circle
+                cx={node.x}
+                cy={node.y}
+                r={node.level === 0 ? 50 : 40}
+                fill={`url(#gradient-${colorIndex})`}
+                stroke="hsl(var(--border))"
+                strokeWidth="2"
+                className="cursor-pointer hover:opacity-80 transition-opacity"
+                onClick={() => onNodeClick?.(node.id)}
+              />
+              
+              {/* Node text */}
+              <text
+                x={node.x}
+                y={node.y}
+                textAnchor="middle"
+                dominantBaseline="middle"
+                fill="white"
+                fontSize={node.level === 0 ? "14" : "12"}
+                fontWeight="600"
+                className="pointer-events-none"
+              >
+                {node.title.length > 15 ? `${node.title.substring(0, 15)}...` : node.title}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+
+      {/* Empty state */}
+      {positionedNodes.length === 0 && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="text-center">
+            <Maximize className="w-12 h-12 text-muted-foreground mx-auto mb-2" />
+            <p className="text-muted-foreground lowercase">mind map will appear here</p>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-blue-200"></div>
-          <span>Concepts</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-green-200"></div>
-          <span>Details</span>
-        </div>
-      </div>
+      )}
     </div>
   );
 }

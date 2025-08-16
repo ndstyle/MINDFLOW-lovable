@@ -112,11 +112,11 @@ export default function Library() {
           {/* Header */}
           <div className="flex items-center justify-between mb-8">
             <div>
-              <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent mb-2">
-                Document Library
+              <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent mb-2 lowercase">
+                document library
               </h1>
-              <p className="text-xl text-muted-foreground">
-                Access your uploaded documents and generate quizzes
+              <p className="text-xl text-muted-foreground lowercase">
+                access your uploaded documents and generate quizzes
               </p>
             </div>
             <Button
@@ -139,23 +139,24 @@ export default function Library() {
               <div className="w-24 h-24 bg-muted rounded-full flex items-center justify-center mx-auto mb-6">
                 <FileText className="w-12 h-12 text-muted-foreground" />
               </div>
-              <h3 className="text-xl font-semibold mb-2">No documents yet</h3>
-              <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-                Upload your first document to start generating quizzes and mind maps from your content.
+              <h3 className="text-xl font-semibold mb-2 lowercase">no documents yet</h3>
+              <p className="text-muted-foreground mb-6 max-w-md mx-auto lowercase">
+                upload your first document to start generating quizzes and mind maps from your content.
               </p>
               <div className="flex gap-4 justify-center">
                 <Button
                   onClick={() => setLocation('/upload')}
-                  className="bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
+                  className="bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 lowercase"
                 >
                   <Upload className="w-4 h-4 mr-2" />
-                  Upload Document
+                  upload document
                 </Button>
                 <Button
                   variant="outline"
                   onClick={() => setLocation('/create')}
+                  className="lowercase"
                 >
-                  Create Mind Map
+                  create mind map
                 </Button>
               </div>
             </div>

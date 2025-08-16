@@ -8,6 +8,7 @@ import { CategorySelector } from "@/components/CategorySelector";
 import { SidePanelChat } from "@/components/SidePanelChat";
 import { Zap, Users, Download, ChevronRight, MessageCircle, Share, ArrowDown } from "lucide-react";
 import { toast } from "sonner";
+import { useLocation } from "wouter";
 
 import { useProfile } from "@/hooks/useProfile";
 import { useUnlockables } from "@/hooks/useUnlockables";
@@ -29,6 +30,7 @@ const Index = () => {
   const [selectedCategory, setSelectedCategory] = useState('');
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [currentMindmapId, setCurrentMindmapId] = useState<string | null>(null);
+  const [, setLocation] = useLocation();
   
   const { awardXP } = useProfile();
   const { hasFeature } = useUnlockables();
@@ -157,7 +159,7 @@ const Index = () => {
   const shareMindMap = () => {
     const shareData = {
       title: 'My Mind Map',
-      text: 'Check out this mind map I created with Mindflow!',
+      text: 'Check out this mind map I created with QuickLearned!',
       url: window.location.href
     };
     if (navigator.share) {
@@ -271,15 +273,15 @@ const Index = () => {
 
             <h1 className="text-5xl font-bold leading-tight md:text-5xl">
               <span className="text-foreground lowercase">transform </span>
-              <span className="gradient-text lowercase">messy notes</span>
+              <span className="gradient-text lowercase">documents</span>
               <span className="text-foreground lowercase"> into</span>
               <br />
               <span className="gradient-text lowercase">structured mind maps</span>
             </h1>
 
             <p className="text-muted-foreground max-w-3xl mx-auto lowercase leading-relaxed text-base">
-              paste or voice your chaotic thoughts and watch ai instantly create
-              beautiful, interactive mind maps and project plans. no manual effort
+              upload PDFs, text files, or DOCX documents and watch ai instantly create
+              beautiful, interactive mind maps with integrated quizzes. no manual effort
               required.
             </p>
 
@@ -299,8 +301,8 @@ const Index = () => {
             </div>
 
             <div className="flex items-center justify-center gap-4 pt-8">
-              <Button size="lg" onClick={handleTryNow} className="lowercase text-base px-8 py-3">
-                try it now
+              <Button size="lg" onClick={() => setLocation('/upload')} className="lowercase text-base px-8 py-3">
+                upload document
                 <ChevronRight className="w-4 h-4 ml-2" />
               </Button>
               <Button variant="outline" size="lg" className="lowercase text-base px-8 py-3" onClick={scrollToFeatures}>
@@ -321,28 +323,28 @@ const Index = () => {
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="space-y-3 p-6 rounded-lg bg-card border border-border/50">
-                <h3 className="font-semibold text-foreground lowercase">speak or type</h3>
-                <p className="text-sm text-muted-foreground lowercase">we'll turn it into a mind map</p>
+                <h3 className="font-semibold text-foreground lowercase">upload documents</h3>
+                <p className="text-sm text-muted-foreground lowercase">PDF, TXT, or DOCX files</p>
               </div>
               
               <div className="space-y-3 p-6 rounded-lg bg-card border border-border/50">
-                <h3 className="font-semibold text-foreground lowercase">watch your ideas organize themselves</h3>
-                <p className="text-sm text-muted-foreground lowercase">in real-time</p>
+                <h3 className="font-semibold text-foreground lowercase">ai-powered mind maps</h3>
+                <p className="text-sm text-muted-foreground lowercase">generated automatically</p>
               </div>
               
               <div className="space-y-3 p-6 rounded-lg bg-card border border-border/50">
-                <h3 className="font-semibold text-foreground lowercase">we ask what you're working on</h3>
-                <p className="text-sm text-muted-foreground lowercase">notes, app, brainstorm, etc.</p>
+                <h3 className="font-semibold text-foreground lowercase">interactive quizzes</h3>
+                <p className="text-sm text-muted-foreground lowercase">test your knowledge</p>
               </div>
               
               <div className="space-y-3 p-6 rounded-lg bg-card border border-border/50">
-                <h3 className="font-semibold text-foreground lowercase">your map adapts to your goal</h3>
-                <p className="text-sm text-muted-foreground lowercase">automatically</p>
+                <h3 className="font-semibold text-foreground lowercase">spaced repetition</h3>
+                <p className="text-sm text-muted-foreground lowercase">optimized learning</p>
               </div>
               
               <div className="space-y-3 p-6 rounded-lg bg-card border border-border/50">
-                <h3 className="font-semibold text-foreground lowercase">need to tweak something?</h3>
-                <p className="text-sm text-muted-foreground lowercase">just click "make changes"</p>
+                <h3 className="font-semibold text-foreground lowercase">export & share</h3>
+                <p className="text-sm text-muted-foreground lowercase">PDF exports and links</p>
               </div>
               
               <div className="space-y-3 p-6 rounded-lg bg-card border border-border/50">

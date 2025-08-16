@@ -1,8 +1,8 @@
-# Mindflow - AI-Powered Visual Learning App
+# QuickLearned - AI-Powered Visual Learning App
 
 ## Overview
 
-Mindflow is a comprehensive AI-powered visual learning web application that transforms messy text or voice input into interactive, visually appealing mind maps. The application uses artificial intelligence to generate structured mind maps and includes gamification elements, collaborative features, and study aids. Built as a full-stack solution with React frontend and Express backend, it provides a complete learning platform with user authentication, profile management, and progress tracking.
+QuickLearned is a comprehensive AI-powered visual learning web application that transforms documents (PDF, TXT, DOCX) into interactive, visually appealing mind maps with integrated quiz functionality. The application uses artificial intelligence to generate structured mind maps and includes gamification elements, collaborative features, and study aids. Built as a full-stack solution with React frontend and Express backend, it provides a complete learning platform with user authentication, profile management, and progress tracking.
 
 ## User Preferences
 

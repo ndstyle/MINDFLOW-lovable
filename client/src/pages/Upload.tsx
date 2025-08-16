@@ -162,11 +162,11 @@ export default function Upload() {
               Back to Library
             </Button>
 
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent mb-2">
-              Upload Document
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent mb-2 lowercase">
+              upload document
             </h1>
-            <p className="text-xl text-muted-foreground">
-              Upload a document to generate mind maps and quizzes
+            <p className="text-xl text-muted-foreground lowercase">
+              upload a document to generate mind maps and quizzes
             </p>
           </div>
 
