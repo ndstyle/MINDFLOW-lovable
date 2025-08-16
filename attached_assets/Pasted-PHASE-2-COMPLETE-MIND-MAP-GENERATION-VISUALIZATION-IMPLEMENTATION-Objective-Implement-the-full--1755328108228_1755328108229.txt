@@ -1,0 +1,65 @@
+PHASE 2: COMPLETE MIND MAP GENERATION & VISUALIZATION IMPLEMENTATION
+
+Objective: Implement the full flow from text input → AI mind map generation → visual display that EXACTLY matches the provided reference design.
+
+CRITICAL REQUIREMENTS:
+
+Mind Map Structure (Must Match Reference)
+
+ONLY Topic and Concept nodes (no leaf/atomic nodes)
+Structure stops at exactly 2-3 levels as shown in screenshot
+1 root topic → 3-5 main concepts → 2-3 sub-concepts per main concept
+No deeper nesting beyond level 2-3
+Visual Layout (Copy Reference Design Exactly)
+
+Left-to-right radial layout with root node positioned on the left
+Main branches expand horizontally to the right
+Each branch uses distinct colors (no 3D effects, shadows, or gradients)
+Smooth curved connection lines (never blocky or jagged)
+Rounded rectangles for all node labels
+Proper text wrapping within nodes
+Auto-scale to fit all content clearly in view
+Export Functionality
+
+"Generate Image" button floating near root node
+Export as PNG functionality
+FILES TO MODIFY:
+
+A. Server-side Generation (server/services/mindmap-generator.ts)
+
+Update OpenAI prompt to generate ONLY 2-3 level hierarchical structure
+Ensure output format matches visualization component requirements
+Generate proper positioning data for left-to-right layout
+Assign distinct colors to different branch families
+B. Visualization Component (client/src/components/MindMapVisualization.tsx)
+
+Complete rewrite to match reference design exactly
+Implement left-to-right radial layout algorithm
+Create smooth curved SVG paths for connections
+Add proper node styling with rounded rectangles
+Implement text wrapping and auto-sizing
+Add zoom/pan controls if needed
+C. Styling (client/src/components/mindmap-styles.css)
+
+New CSS file with styles matching reference design
+Define color palette for different branches
+Responsive design for different screen sizes
+D. Integration (client/src/pages/Create.tsx and client/src/pages/View.tsx)
+
+Ensure seamless flow from generation to visualization
+Handle loading states during generation
+Display visualization component with generated data
+Add export functionality integration
+IMPLEMENTATION FLOW:
+
+User inputs text →
+Server generates structured mind map data →
+Client receives data and renders visualization →
+User can export as image
+SUCCESS CRITERIA:
+
+Visual output matches reference screenshot exactly
+Generation creates proper 2-3 level hierarchy
+All nodes are clearly readable with proper spacing
+Export functionality works correctly
+Responsive design works on different screen sizes
