@@ -1,0 +1,79 @@
+COMPREHENSIVE DASHBOARD MINDMAP VISUALIZATION & LIBRARY REMOVAL PROMPT
+
+CRITICAL OBJECTIVE: Transform Dashboard into the central hub for ALL mindmap management, remove redundant Library and Upload pages, and ensure proper mindmap navigation flow.
+
+REQUIRED CHANGES:
+
+1. Dashboard Mind Map Visualization Fix (client/src/pages/Dashboard.tsx):
+
+Make ALL mind map cards clickable to navigate to /mindmap/{id} route
+Add proper onClick handlers: onClick={() => setLocation(/mindmap/${mindmap.id})}
+Add visual hover effects (cursor-pointer, hover:shadow-lg) to indicate clickability
+Keep existing delete functionality working
+Remove the "your library" card completely from the dashboard grid
+Remove the "upload document" card completely from the dashboard grid
+Update the grid layout to accommodate removed cards (adjust grid-cols)
+2. Complete Library Page Removal:
+
+Delete client/src/pages/Library.tsx file entirely
+Remove /library route from client/src/App.tsx router configuration
+Remove Library import from App.tsx
+Delete any remaining references to Library component
+3. Complete Upload Page/Feature Removal:
+
+Delete client/src/pages/Upload.tsx file entirely
+Remove /upload route from client/src/App.tsx router configuration
+Remove Upload import from App.tsx
+Delete any remaining references to Upload component
+4. Header Navigation Updates (client/src/components/Header.tsx):
+
+Remove ALL references to /library links
+Remove ALL references to /upload links and "Upload Document" buttons
+Remove "upload document" navigation item
+Keep only: home, create mind map navigation items for authenticated users
+Update navigation structure to reflect removed features
+5. Mind Map View Navigation (client/src/pages/MindMapView.tsx):
+
+Change ALL "Back to Library" references to "Back to Dashboard"
+Update navigation to route to /dashboard instead of /library
+Ensure proper back navigation: onClick={() => setLocation('/dashboard')}
+6. Remove Upload References Throughout Codebase:
+
+Remove upload-related components and imports
+Remove document upload functionality references
+Clean up any upload-related routes or navigation
+SUCCESS CRITERIA - AGENT MUST TEST ALL OF THESE:
+
+Dashboard displays mind map cards correctly ✓
+Mind map cards are clickable and navigate to /mindmap/{id} ✓
+Navigation flow works: Dashboard → Click mindmap → View mindmap → Back to Dashboard ✓
+No broken links or references to /library or /upload exist ✓
+Delete functionality works from Dashboard ✓
+No 404 errors when accessing removed routes ✓
+Header navigation is clean and functional ✓
+Router configuration has no dead routes ✓
+TECHNICAL REQUIREMENTS:
+
+Use setLocation(/mindmap/${mindmap.id}) for navigation
+Add proper CSS classes: cursor-pointer hover:shadow-lg transition-shadow to cards
+Ensure onClick doesn't interfere with delete button clicks
+Update router in App.tsx to remove /library and /upload routes
+Remove all import statements for deleted components
+Test navigation flow thoroughly after implementation
+CRITICAL TESTING CHECKLIST - AGENT MUST VERIFY:
+
+Create a mindmap → appears on dashboard → click card → opens mindmap → back to dashboard works
+No console errors about missing routes or components
+Dashboard layout looks proper without library/upload cards
+All navigation links work correctly
+Delete functionality still works
+No references to removed features remain anywhere
+DO NOT:
+
+Change mindmap data structure or API endpoints
+Modify authentication flow
+Alter mindmap generation or visualization logic
+Change database schema or API routes
+Touch working Create page functionality
+DEPLOYMENT NOTE: After implementation, agent must thoroughly test the entire navigation flow and verify no broken links exist before considering the task complete.
+
