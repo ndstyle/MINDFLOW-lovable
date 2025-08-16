@@ -1,0 +1,23 @@
+For Phase 2 (Mind Map Generation), do NOT design or build your own visualization.
+
+- Copy the mind map UX and style in the attached image EXACTLY.
+    - Use ONLY Topic and Concept nodes—NO leaf/atomic/fact nodes. The structure must stop at the 2nd or 3rd level exactly as shown.
+    - Mind map should have a simple, left-to-right radial or curved hierarchy (like the screenshot), with root on the left and branches expanding right.
+    - Each branch uses a distinct color but no 3D/shadowed/gradient effects—just clean lines and colored curves.
+    - Use rounded rectangles or clean rectangles for node labels. Text must wrap and be spaced for readability. Keep font and sizing visually similar to the sample.
+    - Edge lines must be smooth, curved, and visually distinct eastward branches like those shown—never blocky or jagged.
+    - Mind map must always auto-scale and fit to the view, showing all content clearly.
+
+- The UI must include:
+    - “Generate Image” or export control floating near the root node.
+    - A “Mind map is ready!” status/dialog at the bottom with options for color scheme and structure style just like the screenshot.
+    - Small color/structure previews at the bottom—user can pick between line styles and color themes.
+    - No hover menus, no distracting effects; just smooth, intuitive expansion.
+    - All user interactivity (branch selection, focus, export) must be done via clean controls as shown—not by right-click, no hidden menus.
+
+- **NO leaf nodes** or fact-level branches are permitted in this visualization for MVP. If your parser would generate more nested nodes, collapse/summarize them into Concept nodes, or discard facts for now.
+- Captioning, node names, and color schemes must **match or closely mimic the attached screenshot** for consistency and professionalism.
+
+Before building, present a Figma-style design of the new UI for approval, showing all states (default, selected color/style, export).
+
+Do NOT deliver any other mind map style for MVP. Copy this look and UX exactly.

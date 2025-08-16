@@ -1,0 +1,46 @@
+Stop. You have not delivered a working MVP.
+
+You are falsely reporting features as "complete" when the product is visibly broken, unusable, and not meeting MVP requirements or the provided specs.
+
+Here is what you MUST do before any further coding:
+
+1. **Acknowledge the Gaps and Failures**
+   - List explicitly: every area in the UI or feature set that is not discoverable, broken, missing, or only present in the backend.
+   - Acknowledge that no feature is "done" unless a regular user can find, use, and see results via the frontend in a logical workflow, with proper feedback/states and error handling.
+   - Confirm you understand that the goal is not just API completion, but a complete, usable, testable product.
+
+2. **MVP-Driven, User-Centric Specification**
+   - Re-read the original MVP specification and all clarifications.
+   - For every MVP feature (upload, navigation, map, quiz, export, share, auth, error/success flows, session/edge cases), prepare a visual/UX flow chart or step-by-step user journey that shows how each feature is used—start to finish, including every possible user action.
+   - For each flow, specify clear UI elements and navigation: what buttons are present, what pages they reach, what happens visually for every state (loading, success, error, empty, conflict).
+   - If you do not understand a user flow, pause IMMEDIATELY and list your questions for clarification. Do not code "just to move forward" if you have any uncertainties.
+
+3. **Comprehensive UI/UX Planning**
+   - Prepare a full sitemap/component map for the "quicklearned" MVP: what screens exist, how users navigate between them, what actions are available, what state each component shows in every situation (new user, after upload, after mind map, during quiz, on export, etc.).
+   - Simplify and clarify the navigation bar and landing flow: no duplicates, no dead links, no placeholder buttons. Every action should make sense to a first-time user.
+
+4. **Edge Cases, Error States, and Persistence**
+   - For every possible failure or disconnection scenario (failed upload, processing/timeout, auth/session dropout, server error, invalid input), specify the corresponding user feedback, retry/recover path, and visible message.
+   - Session persistence, login/logout, and user flows must be stable and reliable—auto-logout, random signouts, or broken sessions are unacceptable at MVP.
+
+5. **Clarity and Transparency**
+   - Before you touch code, present:
+      - A complete written user journey for every core flow and page (upload, map, quiz, export, share, library, auth, errors).
+      - Mockup or describe (in text or wireframe) what the UI/UX will look like and how a user interacts with it at each step.
+      - A clear list of what hasn’t worked so far, what broke, and WHY, so I can help diagnose/clarify.
+      - A list of all points where you need input—don’t silently guess.
+
+6. **Resource and Credit Usage**
+   - Confirm you will NOT continue burning credits until a working, user-verified, edge-case-checked product flow is PLANNED and signed off.
+
+7. **Wait for Approval Before Coding**
+   - Once you have completed this planning, ask:
+     > “Do you approve this comprehensive user-journey and UI/UX plan, and do you have clarifications before I proceed with implementation?”
+
+Only after my explicit approval should you resume any development.
+
+**If you do not understand any part of the project, the user journey, or MVP requirement, do not move forward—stop and clarify.**
+
+You must deliver a website that works fully, for all main and edge user flows, as a real user would expect, matching MVP terms and usability. Partial/broken workflows, invisible features, and non-discoverable UI are not acceptable.
+
+You are accountable for a complete, robust, *user-validated* MVP—not just lines of code or backend endpoints.
