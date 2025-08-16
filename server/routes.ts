@@ -2,6 +2,10 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { supabase } from "../lib/supabase";
 import type { Database } from "../lib/supabase";
+import { documentProcessor } from "./services/document-processor";
+import { quizGenerator } from "./services/quiz-generator";
+import { exportService } from "./services/export";
+import multer from 'multer';
 
 // Extend Request interface
 interface AuthenticatedRequest extends Request {
@@ -462,6 +466,191 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Chat assistant error:', error);
       res.status(500).json({ error: 'Failed to process chat request' });
+    }
+  });
+
+  // Setup multer for file uploads
+  const upload = multer({ 
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+    fileFilter: (req, file, cb) => {
+      const allowedTypes = ['application/pdf', 'text/plain', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+      if (allowedTypes.includes(file.mimetype)) {
+        cb(null, true);
+      } else {
+        cb(new Error('Invalid file type. Only PDF, TXT, and DOCX files are allowed.'));
+      }
+    }
+  });
+
+  // MVP Document upload and processing routes
+  app.post('/api/documents/upload', requireAuth, upload.single('file'), async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+      }
+
+      if (!req.profile) {
+        return res.status(401).json({ error: 'User profile not found' });
+      }
+
+      const document = await documentProcessor.processDocument(
+        req.file.buffer,
+        req.file.originalname,
+        req.profile.id
+      );
+
+      res.json(document);
+    } catch (error) {
+      console.error('Upload error:', error);
+      res.status(400).json({ error: error instanceof Error ? error.message : 'Upload failed' });
+    }
+  });
+
+  app.get('/api/documents/:id/status', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { data: document, error } = await supabase
+        .from('documents')
+        .select('status')
+        .eq('id', req.params.id)
+        .eq('user_id', req.profile!.id)
+        .single();
+
+      if (error || !document) {
+        return res.status(404).json({ error: 'Document not found' });
+      }
+
+      res.json({ status: document.status });
+    } catch (error) {
+      console.error('Status check error:', error);
+      res.status(500).json({ error: 'Failed to check status' });
+    }
+  });
+
+  app.get('/api/documents/:id/mindmap', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { data: nodes, error } = await supabase
+        .from('nodes')
+        .select('*')
+        .eq('document_id', req.params.id)
+        .order('level', { ascending: true });
+
+      if (error) {
+        return res.status(500).json({ error: 'Failed to fetch mind map' });
+      }
+
+      res.json({ nodes: nodes || [] });
+    } catch (error) {
+      console.error('Mind map fetch error:', error);
+      res.status(500).json({ error: 'Failed to fetch mind map' });
+    }
+  });
+
+  // Quiz routes
+  app.post('/api/quiz/generate/:nodeId', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const questions = await quizGenerator.generateQuestionsForNode(req.params.nodeId);
+      res.json({ questions });
+    } catch (error) {
+      console.error('Question generation error:', error);
+      res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to generate questions' });
+    }
+  });
+
+  app.get('/api/quiz/node/:nodeId', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const questions = await quizGenerator.getQuestionsForNode(req.params.nodeId);
+      res.json({ questions });
+    } catch (error) {
+      console.error('Question fetch error:', error);
+      res.status(500).json({ error: 'Failed to fetch questions' });
+    }
+  });
+
+  app.post('/api/quiz/answer', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { questionId, answer, timeSpent, sessionId } = req.body;
+      
+      if (!questionId || !answer) {
+        return res.status(400).json({ error: 'Question ID and answer are required' });
+      }
+
+      const result = await quizGenerator.submitAnswer(
+        questionId,
+        req.profile!.id,
+        answer,
+        timeSpent,
+        sessionId
+      );
+
+      res.json(result);
+    } catch (error) {
+      console.error('Answer submission error:', error);
+      res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to submit answer' });
+    }
+  });
+
+  // Export and share routes
+  app.post('/api/export/:documentId', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { format } = req.body; // 'markdown', 'png', 'pdf'
+      
+      if (format === 'markdown') {
+        const markdown = await exportService.exportMarkdown(req.params.documentId, req.profile!.id);
+        res.setHeader('Content-Type', 'text/markdown');
+        res.setHeader('Content-Disposition', 'attachment; filename="mindmap.md"');
+        res.send(markdown);
+      } else {
+        res.status(400).json({ error: 'Unsupported export format' });
+      }
+    } catch (error) {
+      console.error('Export error:', error);
+      res.status(500).json({ error: error instanceof Error ? error.message : 'Export failed' });
+    }
+  });
+
+  app.post('/api/share/:documentId', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const shareToken = await exportService.generateShareLink(req.params.documentId, req.profile!.id);
+      res.json({ shareToken, shareUrl: `${req.protocol}://${req.get('host')}/shared/${shareToken}` });
+    } catch (error) {
+      console.error('Share link error:', error);
+      res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to create share link' });
+    }
+  });
+
+  app.get('/api/shared/:token', async (req: Request, res: Response) => {
+    try {
+      const sharedContent = await exportService.getSharedDocument(req.params.token);
+      
+      if (!sharedContent) {
+        return res.status(404).json({ error: 'Shared content not found or expired' });
+      }
+
+      res.json(sharedContent);
+    } catch (error) {
+      console.error('Shared content error:', error);
+      res.status(500).json({ error: 'Failed to fetch shared content' });
+    }
+  });
+
+  // User library route
+  app.get('/api/documents', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { data: documents, error } = await supabase
+        .from('documents')
+        .select('id, title, type, status, created_at, updated_at')
+        .eq('user_id', req.profile!.id)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        return res.status(500).json({ error: 'Failed to fetch documents' });
+      }
+
+      res.json({ documents: documents || [] });
+    } catch (error) {
+      console.error('Documents fetch error:', error);
+      res.status(500).json({ error: 'Failed to fetch documents' });
     }
   });
 

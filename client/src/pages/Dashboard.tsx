@@ -1,6 +1,6 @@
 import { default as Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
-import { Plus, FileText, Calendar, Trash2 } from "lucide-react";
+import { Plus, FileText, Calendar, Trash2, Upload } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
@@ -136,16 +136,48 @@ const Dashboard = () => {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <Card className="border-2 border-primary/20">
+              <CardHeader className="text-center space-y-4">
+                <Upload className="w-12 h-12 mx-auto text-primary" />
+                <CardTitle className="font-semibold text-foreground lowercase">upload document</CardTitle>
+                <CardDescription className="text-sm text-muted-foreground lowercase">transform PDF, TXT, or DOCX into mind maps</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Link to="/upload">
+                  <Button className="w-full lowercase">
+                    <Upload className="w-4 h-4 mr-2" />
+                    upload file
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
+
             <Card>
               <CardHeader className="text-center space-y-4">
-                <Plus className="w-12 h-12 mx-auto text-primary" />
+                <FileText className="w-12 h-12 mx-auto text-accent" />
+                <CardTitle className="font-semibold text-foreground lowercase">your library</CardTitle>
+                <CardDescription className="text-sm text-muted-foreground lowercase">view all your documents and mind maps</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Link to="/library">
+                  <Button variant="outline" className="w-full lowercase">
+                    <FileText className="w-4 h-4 mr-2" />
+                    view library
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="text-center space-y-4">
+                <Plus className="w-12 h-12 mx-auto text-secondary" />
                 <CardTitle className="font-semibold text-foreground lowercase">create new</CardTitle>
-                <CardDescription className="text-sm text-muted-foreground lowercase">start a fresh mind map</CardDescription>
+                <CardDescription className="text-sm text-muted-foreground lowercase">start a fresh mind map from scratch</CardDescription>
               </CardHeader>
               <CardContent>
                 <Link to="/">
-                  <Button className="w-full lowercase">
+                  <Button variant="outline" className="w-full lowercase">
                     <Plus className="w-4 h-4 mr-2" />
                     new mind map
                   </Button>
@@ -155,22 +187,7 @@ const Dashboard = () => {
 
             <Card>
               <CardHeader className="text-center space-y-4">
-                <FileText className="w-12 h-12 mx-auto text-accent" />
-                <CardTitle className="font-semibold text-foreground lowercase">total maps</CardTitle>
-                <CardDescription className="text-sm text-muted-foreground lowercase">{mindmaps.length} mind maps created</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Link to="/history">
-                  <Button variant="outline" className="w-full lowercase">
-                    view all
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="text-center space-y-4">
-                <Calendar className="w-12 h-12 mx-auto text-secondary" />
+                <Calendar className="w-12 h-12 mx-auto text-muted-foreground" />
                 <CardTitle className="font-semibold text-foreground lowercase">recent activity</CardTitle>
                 <CardDescription className="text-sm text-muted-foreground lowercase">your latest creations</CardDescription>
               </CardHeader>
