@@ -62,7 +62,7 @@ export default function Library() {
     } catch (error) {
       console.error('Error fetching documents:', error);
       toast({
-        title: "Failed to load documents",
+        title: "failed to load documents",
         description: "Please try refreshing the page.",
         variant: "destructive"
       });

@@ -2,9 +2,9 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { supabase } from "../lib/supabase";
 import type { Database } from "../lib/supabase";
-import { documentProcessor } from "./services/document-processor";
+import { DocumentProcessor } from "./services/document-processor";
 import { quizGenerator } from "./services/quiz-generator";
-import { exportService } from "./services/export";
+import { mindMapGenerator } from "./services/mindmap-generator";
 import multer from 'multer';
 
 // Extend Request interface
@@ -19,6 +19,7 @@ type Unlockable = Database['public']['Tables']['unlockables']['Row'];
 type UserUnlockable = Database['public']['Tables']['user_unlockables']['Row'];
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  const documentProcessor = new DocumentProcessor();
   // Middleware to extract user from Supabase auth header
   const getAuthenticatedUser = async (req: any): Promise<{ user: any; profile: Profile | null }> => {
     const authHeader = req.headers.authorization;
@@ -469,12 +470,169 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Document upload and processing routes
+  app.post('/api/documents/upload', requireAuth, upload.single('file'), async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+      }
+
+      const { user } = req;
+      const file = req.file;
+
+      // Validate file size and type
+      if (file.size > 10 * 1024 * 1024) {
+        return res.status(400).json({ error: 'File size exceeds 10MB limit' });
+      }
+
+      // Process the document
+      const result = await documentProcessor.processDocument(file, user.id);
+
+      res.json({
+        success: true,
+        documentId: result.documentId,
+        message: 'Document uploaded and processing started',
+        document: result.document
+      });
+
+    } catch (error) {
+      console.error('Upload error:', error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Upload failed' 
+      });
+    }
+  });
+
+  app.get('/api/documents', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { data: documents, error } = await supabase
+        .from('documents')
+        .select('*')
+        .eq('user_id', req.user!.id)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        return res.status(500).json({ error: error.message });
+      }
+
+      res.json({ documents: documents || [] });
+    } catch (error) {
+      console.error('Get documents error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  app.get('/api/documents/:id', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+
+      const { data: document, error } = await supabase
+        .from('documents')
+        .select('*')
+        .eq('id', id)
+        .eq('user_id', req.user!.id)
+        .single();
+
+      if (error) {
+        return res.status(404).json({ error: 'Document not found' });
+      }
+
+      res.json(document);
+    } catch (error) {
+      console.error('Get document error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  app.get('/api/documents/:id/nodes', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+
+      // Verify document ownership
+      const { data: document, error: docError } = await supabase
+        .from('documents')
+        .select('id')
+        .eq('id', id)
+        .eq('user_id', req.user!.id)
+        .single();
+
+      if (docError) {
+        return res.status(404).json({ error: 'Document not found' });
+      }
+
+      // Get nodes for this document
+      const { data: nodes, error } = await supabase
+        .from('nodes')
+        .select('*')
+        .eq('document_id', id)
+        .order('level', { ascending: true });
+
+      if (error) {
+        return res.status(500).json({ error: error.message });
+      }
+
+      res.json({ nodes: nodes || [] });
+    } catch (error) {
+      console.error('Get nodes error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  app.get('/api/documents/:id/quiz', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+
+      // Verify document ownership
+      const { data: document, error: docError } = await supabase
+        .from('documents')
+        .select('id')
+        .eq('id', id)
+        .eq('user_id', req.user!.id)
+        .single();
+
+      if (docError) {
+        return res.status(404).json({ error: 'Document not found' });
+      }
+
+      // Get quiz for this document
+      const quiz = await quizGenerator.getQuizForDocument(id);
+      res.json(quiz);
+      
+    } catch (error) {
+      console.error('Get quiz error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  app.post('/api/quiz/:questionId/answer', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { questionId } = req.params;
+      const { answer } = req.body;
+
+      if (!answer) {
+        return res.status(400).json({ error: 'Answer is required' });
+      }
+
+      const result = await quizGenerator.submitQuizAnswer(questionId, answer, req.user!.id);
+      res.json(result);
+      
+    } catch (error) {
+      console.error('Submit answer error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
   // Setup multer for file uploads
   const upload = multer({ 
     storage: multer.memoryStorage(),
     limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
     fileFilter: (req, file, cb) => {
-      const allowedTypes = ['application/pdf', 'text/plain', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+      const allowedTypes = [
+        'application/pdf',
+        'text/plain',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      ];
+      
       if (allowedTypes.includes(file.mimetype)) {
         cb(null, true);
       } else {

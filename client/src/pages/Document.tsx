@@ -9,15 +9,15 @@ import { toast } from 'sonner';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useLocation } from 'wouter';
-import type { Document, Node, Question } from '../../../shared/schema';
 import { MindMapCanvas } from '@/components/MindMapCanvas';
 import { QuizPlayer } from '@/components/QuizPlayer';
+import { ExportMindMap } from '@/components/ExportMindMap';
 
 export default function DocumentView() {
   const params = useParams();
   const documentId = params.id;
   const [, setLocation] = useLocation();
-  const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+  const [selectedNode, setSelectedNode] = useState<any>(null);
   const [showQuiz, setShowQuiz] = useState(false);
 
   // Fetch document details
@@ -34,57 +34,211 @@ export default function DocumentView() {
       });
       
       if (!response.ok) throw new Error('Failed to fetch document');
-      return response.json() as Promise<Document>;
+      return response.json();
     },
     enabled: !!documentId
   });
 
   // Fetch mind map nodes
   const { data: mindMapData, isLoading: mindMapLoading } = useQuery({
-    queryKey: ['/api/documents', documentId, 'mindmap'],
+    queryKey: ['/api/documents', documentId, 'nodes'],
     queryFn: async () => {
-      const { data: { session }, error } = await supabase.auth.getSession();
+      const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
 
-      const response = await fetch(`/api/documents/${documentId}/mindmap`, {
+      const response = await fetch(`/api/documents/${documentId}/nodes`, {
         headers: {
           'Authorization': `Bearer ${session.access_token}`
         }
       });
       
-      if (!response.ok) throw new Error('Failed to fetch mind map');
+      if (!response.ok) throw new Error('Failed to fetch mind map nodes');
       return response.json();
     },
     enabled: !!documentId && document?.status === 'completed'
   });
 
-  // Fetch questions for selected node
-  const { data: questions } = useQuery({
-    queryKey: ['/api/quiz/node', selectedNode?.id],
+  // Fetch quiz questions for the document
+  const { data: quizData } = useQuery({
+    queryKey: ['/api/documents', documentId, 'quiz'],
     queryFn: async () => {
-      const { data: { session }, error } = await supabase.auth.getSession();
-      if (!session || !selectedNode) throw new Error('Not authenticated or no node selected');
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
 
-      const response = await fetch(`/api/quiz/node/${selectedNode.id}`, {
+      const response = await fetch(`/api/documents/${documentId}/quiz`, {
         headers: {
           'Authorization': `Bearer ${session.access_token}`
         }
       });
       
-      if (!response.ok) throw new Error('Failed to fetch questions');
-      const result = await response.json();
-      return result.questions as Question[];
+      if (!response.ok) throw new Error('Failed to fetch quiz');
+      return response.json();
     },
-    enabled: !!selectedNode
+    enabled: !!documentId && document?.status === 'completed'
   });
 
-  const generateQuestionsMutation = useMutation({
-    mutationFn: async (nodeId: string) => {
-      const { data: { session }, error } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
+  const nodes = mindMapData?.nodes || [];
+  const questions = quizData?.questions || [];
 
-      const response = await fetch(`/api/quiz/generate/${nodeId}`, {
-        method: 'POST',
+  if (documentLoading) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <Card>
+          <CardContent className="text-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground lowercase">loading document...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!document) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <Card>
+          <CardContent className="text-center py-8">
+            <h3 className="text-lg font-semibold mb-2 lowercase">document not found</h3>
+            <Button onClick={() => setLocation('/library')} variant="outline" className="lowercase">
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              back to library
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="container mx-auto px-4 py-8">
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-4">
+          <Button 
+            onClick={() => setLocation('/library')} 
+            variant="ghost" 
+            size="sm"
+            className="lowercase"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            back to library
+          </Button>
+          <div>
+            <h1 className="text-2xl font-bold lowercase">{document.title}</h1>
+            <div className="flex items-center gap-2 mt-1">
+              <Badge variant={document.status === 'completed' ? 'default' : 'secondary'}>
+                {document.status}
+              </Badge>
+              <span className="text-sm text-muted-foreground">
+                {document.type?.toUpperCase()} • {new Date(document.created_at).toLocaleDateString()}
+              </span>
+            </div>
+          </div>
+        </div>
+        
+        {document.status === 'completed' && nodes.length > 0 && (
+          <ExportMindMap 
+            nodes={nodes}
+            documentTitle={document.title}
+            documentId={documentId}
+          />
+        )}
+      </div>
+
+      {document.status === 'processing' && (
+        <Card className="mb-6">
+          <CardContent className="text-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+            <h3 className="text-lg font-semibold mb-2 lowercase">processing document</h3>
+            <p className="text-muted-foreground lowercase">
+              we're analyzing your document and generating the mind map and quiz. this usually takes 1-2 minutes.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {document.status === 'failed' && (
+        <Card className="mb-6">
+          <CardContent className="text-center py-8">
+            <h3 className="text-lg font-semibold mb-2 text-red-600 lowercase">processing failed</h3>
+            <p className="text-muted-foreground lowercase">
+              we couldn't process this document. please try uploading it again.
+            </p>
+            <Button onClick={() => setLocation('/upload')} className="mt-4 lowercase">
+              upload new document
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {document.status === 'completed' && (
+        <Tabs defaultValue="mindmap" className="w-full">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="mindmap" className="lowercase">
+              <Brain className="w-4 h-4 mr-2" />
+              mind map
+            </TabsTrigger>
+            <TabsTrigger value="quiz" className="lowercase">
+              <HelpCircle className="w-4 h-4 mr-2" />
+              quiz ({questions.length})
+            </TabsTrigger>
+            <TabsTrigger value="content" className="lowercase">
+              <Eye className="w-4 h-4 mr-2" />
+              content
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="mindmap" className="mt-6">
+            {mindMapLoading ? (
+              <Card>
+                <CardContent className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                  <p className="text-muted-foreground lowercase">loading mind map...</p>
+                </CardContent>
+              </Card>
+            ) : nodes.length > 0 ? (
+              <MindMapCanvas nodes={nodes} />
+            ) : (
+              <Card>
+                <CardContent className="text-center py-8">
+                  <Brain className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold mb-2 lowercase">mind map not available</h3>
+                  <p className="text-muted-foreground lowercase">
+                    the mind map is still being generated
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          <TabsContent value="quiz" className="mt-6">
+            <QuizPlayer 
+              questions={questions} 
+              documentId={documentId} 
+            />
+          </TabsContent>
+
+          <TabsContent value="content" className="mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="lowercase">original content</CardTitle>
+                <CardDescription className="lowercase">
+                  the original text extracted from your document
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="prose prose-sm max-w-none">
+                  <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
+                    {document.content?.originalText || document.content?.text || 'No content available'}
+                  </pre>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      )}
+    </div>
+  );
+}
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
           'Content-Type': 'application/json'

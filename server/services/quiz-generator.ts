@@ -1,281 +1,163 @@
-import { supabase } from '../../lib/supabase';
-import type { Node, Question, QuestionInsert } from '../../shared/schema';
 import OpenAI from 'openai';
+import { supabase } from '../../lib/supabase';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY!
 });
 
 export class QuizGenerator {
-  async generateQuestionsForNode(nodeId: string): Promise<Question[]> {
-    // Get node and related nodes for context
-    const { data: node, error: nodeError } = await supabase
-      .from('nodes')
-      .select('*')
-      .eq('id', nodeId)
-      .single();
-
-    if (nodeError || !node) {
-      throw new Error('Node not found');
-    }
-
-    // Get sibling and related nodes for distractor generation
-    const { data: relatedNodes } = await supabase
-      .from('nodes')
-      .select('*')
-      .eq('document_id', node.document_id)
-      .neq('id', nodeId)
-      .limit(10);
-
+  async generateQuiz(documentId: string, nodes: any[]) {
     try {
-      const response = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages: [
+      // Create quiz questions from nodes
+      const questions = [];
+      
+      for (const node of nodes.slice(0, 5)) { // Limit to 5 questions
+        const prompt = `
+          Create a multiple choice question about this topic:
+          Title: ${node.title}
+          Content: ${node.summary}
+          
+          Format as JSON:
           {
-            role: 'system',
-            content: `You are an expert quiz creator. Generate 3-5 high-quality multiple choice questions based on the given node content.
+            "question": "Clear, specific question about the topic",
+            "correct_answer": "The correct answer",
+            "distractors": ["Wrong answer 1", "Wrong answer 2", "Wrong answer 3"],
+            "evidence_anchor": "Brief explanation of why this answer is correct"
+          }
+        `;
 
-            Requirements:
-            1. Each question must have exactly 4 options (1 correct, 3 distractors)
-            2. Distractors should be plausible but clearly wrong
-            3. Include an evidence anchor (direct quote supporting the answer)
-            4. Questions should test understanding, not just memorization
-            5. Avoid ambiguous or trick questions
-            6. No "all of the above" or "none of the above" options
-
-            Return JSON format:
+        const response = await openai.chat.completions.create({
+          model: "gpt-4o-mini",
+          messages: [
             {
-              "questions": [
-                {
-                  "question": "Clear, specific question?",
-                  "correct_answer": "Correct option",
-                  "distractors": ["Wrong option 1", "Wrong option 2", "Wrong option 3"],
-                  "evidence_anchor": "Direct quote from content that supports the answer"
-                }
-              ]
-            }`
-          },
-          {
-            role: 'user',
-            content: `Node Title: ${node.title}
-            Node Summary: ${node.summary}
-            Evidence: ${node.metadata?.evidence || ''}
-            
-            Related concepts for distractors: ${relatedNodes?.map(n => n.title).join(', ')}`
-          }
-        ],
-        temperature: 0.7,
-        max_tokens: 1500
-      });
-
-      const quizData = JSON.parse(response.choices[0].message.content || '{"questions": []}');
-      
-      // Validate and insert questions
-      const questionsToInsert: QuestionInsert[] = [];
-      
-      for (const q of quizData.questions) {
-        // Validate question structure
-        if (!q.question || !q.correct_answer || !Array.isArray(q.distractors) || 
-            q.distractors.length !== 3 || !q.evidence_anchor) {
-          console.warn('Invalid question structure:', q);
-          continue;
-        }
-
-        // Check for duplicate content
-        const isDuplicate = await this.checkDuplicateQuestion(nodeId, q.question);
-        if (isDuplicate) {
-          continue;
-        }
-
-        questionsToInsert.push({
-          node_id: nodeId,
-          type: 'mcq',
-          question: q.question,
-          correct_answer: q.correct_answer,
-          distractors: q.distractors,
-          evidence_anchor: q.evidence_anchor,
-          metadata: { 
-            generated_at: new Date().toISOString(),
-            source_node_title: node.title 
-          }
+              role: "system",
+              content: "You are an expert educator creating high-quality quiz questions for effective learning assessment."
+            },
+            {
+              role: "user",
+              content: prompt
+            }
+          ],
+          max_tokens: 500,
+          temperature: 0.8
         });
+
+        const result = response.choices[0].message.content;
+        if (!result) continue;
+
+        try {
+          const questionData = JSON.parse(result);
+          questions.push({
+            node_id: node.id,
+            type: 'mcq' as const,
+            question: questionData.question,
+            correct_answer: questionData.correct_answer,
+            distractors: questionData.distractors,
+            evidence_anchor: questionData.evidence_anchor,
+            metadata: { ai_generated: true }
+          });
+        } catch (parseError) {
+          console.error('Failed to parse question:', result);
+          continue;
+        }
       }
 
-      if (questionsToInsert.length === 0) {
-        throw new Error('No valid questions generated');
+      // Save questions to database
+      if (questions.length > 0) {
+        const { data: savedQuestions, error: questionError } = await supabase
+          .from('questions')
+          .insert(questions)
+          .select();
+
+        if (questionError) {
+          console.error('Error saving questions:', questionError);
+          throw new Error('Failed to save quiz questions');
+        }
+
+        return savedQuestions || [];
       }
 
-      // Insert questions
-      const { data: insertedQuestions, error } = await supabase
-        .from('questions')
-        .insert(questionsToInsert)
-        .select();
-
-      if (error) {
-        throw new Error('Failed to save questions to database');
-      }
-
-      return insertedQuestions;
+      return [];
 
     } catch (error) {
-      console.error('Error generating questions:', error);
+      console.error('Quiz generation error:', error);
+      throw error;
+    }
+  }
+
+  async getQuizForDocument(documentId: string) {
+    try {
+      // Get all nodes for this document
+      const { data: nodes, error: nodeError } = await supabase
+        .from('nodes')
+        .select('*')
+        .eq('document_id', documentId);
+
+      if (nodeError || !nodes) {
+        throw new Error('Failed to fetch document nodes');
+      }
+
+      // Get questions for these nodes
+      const nodeIds = nodes.map(node => node.id);
       
-      // Create fallback questions
-      return this.createFallbackQuestions(node);
+      const { data: questions, error: questionError } = await supabase
+        .from('questions')
+        .select('*')
+        .in('node_id', nodeIds);
+
+      if (questionError) {
+        throw new Error('Failed to fetch quiz questions');
+      }
+
+      return {
+        questions: questions || [],
+        totalQuestions: questions?.length || 0
+      };
+
+    } catch (error) {
+      console.error('Get quiz error:', error);
+      throw error;
     }
   }
 
-  private async checkDuplicateQuestion(nodeId: string, questionText: string): Promise<boolean> {
-    const { data: existingQuestions } = await supabase
-      .from('questions')
-      .select('question')
-      .eq('node_id', nodeId);
+  async submitQuizAnswer(questionId: string, userAnswer: string, userId: string) {
+    try {
+      // Get the question to check the answer
+      const { data: question, error: questionError } = await supabase
+        .from('questions')
+        .select('*')
+        .eq('id', questionId)
+        .single();
 
-    if (!existingQuestions) return false;
+      if (questionError || !question) {
+        throw new Error('Question not found');
+      }
 
-    // Simple duplicate check - could be enhanced with semantic similarity
-    return existingQuestions.some(q => 
-      this.calculateSimilarity(q.question.toLowerCase(), questionText.toLowerCase()) > 0.8
-    );
-  }
+      // Check if answer is correct
+      const isCorrect = userAnswer.toLowerCase().trim() === question.correct_answer.toLowerCase().trim();
 
-  private calculateSimilarity(str1: string, str2: string): number {
-    // Simple Jaccard similarity
-    const set1 = new Set(str1.split(' '));
-    const set2 = new Set(str2.split(' '));
-    
-    const intersection = new Set([...set1].filter(x => set2.has(x)));
-    const union = new Set([...set1, ...set2]);
-    
-    return intersection.size / union.size;
-  }
+      // Save the attempt (you'd need to create a quiz_attempts table)
+      const attemptData = {
+        user_id: userId,
+        question_id: questionId,
+        user_answer: userAnswer,
+        is_correct: isCorrect,
+        attempted_at: new Date().toISOString()
+      };
 
-  private async createFallbackQuestions(node: Node): Promise<Question[]> {
-    // Create basic questions when AI generation fails
-    const fallbackQuestion: QuestionInsert = {
-      node_id: node.id,
-      type: 'mcq',
-      question: `What is the main concept related to "${node.title}"?`,
-      correct_answer: node.title,
-      distractors: ['Option A', 'Option B', 'Option C'],
-      evidence_anchor: node.summary || node.title,
-      metadata: { fallback: true }
-    };
+      // For now, just return the result
+      return {
+        isCorrect,
+        correctAnswer: question.correct_answer,
+        evidenceAnchor: question.evidence_anchor,
+        explanation: isCorrect ? 
+          'Correct! ' + question.evidence_anchor : 
+          `Incorrect. The correct answer is: ${question.correct_answer}. ${question.evidence_anchor}`
+      };
 
-    const { data: insertedQuestion, error } = await supabase
-      .from('questions')
-      .insert(fallbackQuestion)
-      .select()
-      .single();
-
-    if (error) {
-      throw new Error('Failed to create fallback question');
-    }
-
-    return [insertedQuestion];
-  }
-
-  async getQuestionsForNode(nodeId: string): Promise<Question[]> {
-    const { data: questions, error } = await supabase
-      .from('questions')
-      .select('*')
-      .eq('node_id', nodeId)
-      .order('created_at', { ascending: true });
-
-    if (error) {
-      throw new Error('Failed to fetch questions');
-    }
-
-    return questions || [];
-  }
-
-  async submitAnswer(questionId: string, userId: string, answer: string, timeSpent?: number, sessionId?: string): Promise<{ correct: boolean; explanation: string }> {
-    // Get question details
-    const { data: question, error: questionError } = await supabase
-      .from('questions')
-      .select('*')
-      .eq('id', questionId)
-      .single();
-
-    if (questionError || !question) {
-      throw new Error('Question not found');
-    }
-
-    // Check if answer is correct
-    const isCorrect = answer.toLowerCase().trim() === question.correct_answer.toLowerCase().trim();
-
-    // Record attempt
-    const attemptData = {
-      question_id: questionId,
-      user_id: userId,
-      answer,
-      is_correct: isCorrect,
-      time_spent: timeSpent,
-      session_id: sessionId
-    };
-
-    const { error: attemptError } = await supabase
-      .from('attempts')
-      .insert(attemptData);
-
-    if (attemptError) {
-      console.error('Error recording attempt:', attemptError);
-    }
-
-    // Update mastery score for the node
-    await this.updateMasteryScore(question.node_id, userId, isCorrect);
-
-    return {
-      correct: isCorrect,
-      explanation: isCorrect 
-        ? `Correct! ${question.evidence_anchor}` 
-        : `Incorrect. The correct answer is "${question.correct_answer}". ${question.evidence_anchor}`
-    };
-  }
-
-  private async updateMasteryScore(nodeId: string, userId: string, wasCorrect: boolean) {
-    // Get or create review record
-    const { data: existingReview } = await supabase
-      .from('reviews')
-      .select('*')
-      .eq('node_id', nodeId)
-      .eq('user_id', userId)
-      .single();
-
-    const scoreChange = wasCorrect ? 15 : -10; // +15 for correct, -10 for incorrect
-    const currentScore = existingReview?.mastery_score || 0;
-    const newScore = Math.max(0, Math.min(100, currentScore + scoreChange));
-
-    // Calculate next review interval based on performance
-    const baseInterval = 1; // 1 day
-    const multiplier = Math.floor(newScore / 20); // 0-5 based on mastery
-    const nextInterval = Math.max(1, baseInterval * Math.pow(2, multiplier));
-    const nextReviewDate = new Date();
-    nextReviewDate.setDate(nextReviewDate.getDate() + nextInterval);
-
-    if (existingReview) {
-      // Update existing review
-      await supabase
-        .from('reviews')
-        .update({
-          mastery_score: newScore,
-          next_review_date: nextReviewDate.toISOString(),
-          review_interval: nextInterval,
-          last_reviewed: new Date().toISOString()
-        })
-        .eq('id', existingReview.id);
-    } else {
-      // Create new review
-      await supabase
-        .from('reviews')
-        .insert({
-          node_id: nodeId,
-          user_id: userId,
-          mastery_score: newScore,
-          next_review_date: nextReviewDate.toISOString(),
-          review_interval: nextInterval,
-          last_reviewed: new Date().toISOString()
-        });
+    } catch (error) {
+      console.error('Submit quiz answer error:', error);
+      throw error;
     }
   }
 }

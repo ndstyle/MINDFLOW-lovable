@@ -1,4 +1,5 @@
 import { supabase } from '../../lib/supabase';
+import OpenAI from 'openai';
 import type { Document, DocumentInsert, Chunk, ChunkInsert, Node, NodeInsert } from '../../shared/schema';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
@@ -11,8 +12,8 @@ const openai = new OpenAI({
 });
 
 export class DocumentProcessor {
-  async processDocument(file: Buffer, fileName: string, userId: string): Promise<Document> {
-    const fileType = this.getFileType(fileName);
+  async processDocument(file: Express.Multer.File, userId: string) {
+    const fileType = this.getFileType(file.originalname);
     
     // Validate file type
     if (!['pdf', 'txt', 'docx'].includes(fileType)) {
@@ -21,13 +22,13 @@ export class DocumentProcessor {
 
     // Extract text content
     let textContent: string;
-    let metadata: any = { fileName, fileSize: file.length };
+    let metadata: any = { fileName: file.originalname, fileSize: file.size };
 
     try {
       switch (fileType) {
         case 'pdf':
           try {
-            const pdfData = await pdfParse(file);
+            const pdfData = await pdfParse(file.buffer);
             textContent = pdfData.text;
             metadata.pageCount = pdfData.numpages;
             
@@ -42,12 +43,12 @@ export class DocumentProcessor {
           break;
           
         case 'docx':
-          const docxResult = await mammoth.extractRawText({ buffer: file });
+          const docxResult = await mammoth.extractRawText({ buffer: file.buffer });
           textContent = docxResult.value;
           break;
           
         case 'txt':
-          textContent = file.toString('utf-8');
+          textContent = file.buffer.toString('utf-8');
           break;
           
         default:
@@ -92,13 +93,13 @@ export class DocumentProcessor {
     }
 
     // Create document record
-    const documentData: DocumentInsert = {
+    const documentData = {
       user_id: userId,
-      title: fileName.replace(/\.[^/.]+$/, ""), // Remove file extension
+      title: file.originalname.replace(/\.[^/.]+$/, ""), // Remove file extension
       type: fileType as 'pdf' | 'txt' | 'docx',
       content: { originalText: textContent },
       metadata,
-      status: 'processing'
+      status: 'processing' as const
     };
 
     const { data: document, error } = await supabase
@@ -115,21 +116,22 @@ export class DocumentProcessor {
     // Process document asynchronously
     this.processDocumentAsync(document.id, textContent);
 
-    return document;
+    return { documentId: document.id, document };
   }
 
   private async processDocumentAsync(documentId: string, textContent: string) {
     try {
-      // Step 1: Create chunks
-      const chunks = await this.createChunks(documentId, textContent);
+      // Import here to avoid circular dependencies
+      const { mindMapGenerator } = await import('./mindmap-generator');
+      const { quizGenerator } = await import('./quiz-generator');
       
-      // Step 2: Generate embeddings
-      await this.generateEmbeddings(chunks);
+      // Step 1: Generate mind map structure
+      const mindMapResult = await mindMapGenerator.generateMindMap(documentId, textContent);
       
-      // Step 3: Create mind map structure
-      await this.generateMindMap(documentId, chunks);
+      // Step 2: Generate quiz questions
+      await quizGenerator.generateQuiz(documentId, mindMapResult.nodes);
       
-      // Step 4: Mark document as completed
+      // Step 3: Mark document as completed
       await supabase
         .from('documents')
         .update({ status: 'completed' })
@@ -146,50 +148,22 @@ export class DocumentProcessor {
     }
   }
 
-  private async createChunks(documentId: string, textContent: string): Promise<Chunk[]> {
-    // Smart chunking: Split by paragraphs and combine to ~800-1200 characters
-    const paragraphs = textContent.split(/\n\s*\n/).filter(p => p.trim().length > 0);
-    const chunks: ChunkInsert[] = [];
-    let currentChunk = '';
-    let position = 0;
-
-    for (const paragraph of paragraphs) {
-      if (currentChunk.length + paragraph.length > 1200 && currentChunk.length > 800) {
-        // Save current chunk
-        chunks.push({
-          document_id: documentId,
-          content: currentChunk.trim(),
-          position: position++,
-          metadata: { paragraphCount: currentChunk.split('\n').length }
-        });
-        currentChunk = paragraph;
-      } else {
-        currentChunk += (currentChunk ? '\n\n' : '') + paragraph;
-      }
+  private getFileType(fileName: string): string {
+    const extension = fileName.split('.').pop()?.toLowerCase();
+    switch (extension) {
+      case 'pdf':
+        return 'pdf';
+      case 'txt':
+        return 'txt';
+      case 'docx':
+        return 'docx';
+      default:
+        return 'unknown';
     }
-
-    // Add final chunk
-    if (currentChunk.trim()) {
-      chunks.push({
-        document_id: documentId,
-        content: currentChunk.trim(),
-        position: position++,
-        metadata: { paragraphCount: currentChunk.split('\n').length }
-      });
-    }
-
-    // Insert chunks into database
-    const { data: insertedChunks, error } = await supabase
-      .from('chunks')
-      .insert(chunks)
-      .select();
-
-    if (error) {
-      throw new Error('Failed to create document chunks');
-    }
-
-    return insertedChunks;
   }
+}
+
+export const documentProcessor = new DocumentProcessor();
 
   private async generateEmbeddings(chunks: Chunk[]) {
     for (const chunk of chunks) {
