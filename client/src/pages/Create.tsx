@@ -192,17 +192,20 @@ export default function Create() {
       }
 
       const mindmapData = await response.json();
+      console.log('Generated mindmap data:', mindmapData);
 
-      // Navigate to view page with the generated mind map
-      setLocation('/view', {
-        state: {
-          newMindmap: {
-            title: text.substring(0, 50) + (text.length > 50 ? '...' : ''),
-            content: mindmapData,
-            intent: 'general'
-          }
-        }
-      });
+      // Store the mindmap data in sessionStorage for the view page
+      const mindmapForView = {
+        title: mindmapData.title || text.substring(0, 50) + (text.length > 50 ? '...' : ''),
+        content: mindmapData,
+        intent: 'general',
+        created_at: new Date().toISOString()
+      };
+      
+      sessionStorage.setItem('currentMindmap', JSON.stringify(mindmapForView));
+
+      // Navigate to view page
+      setLocation('/view');
 
       toast({
         title: "Mind map created!",

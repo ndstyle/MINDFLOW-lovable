@@ -22,20 +22,34 @@ export default function View() {
   const [mindMapData, setMindMapData] = useState<MindMapData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Get mind map data from location state or URL params
+  // Get mind map data from sessionStorage or location state
   useEffect(() => {
     if (!loading && !user) {
       setLocation('/auth');
       return;
     }
 
-    // Check if data was passed via navigation state
+    // First check sessionStorage for current mindmap
+    const storedMindmap = sessionStorage.getItem('currentMindmap');
+    if (storedMindmap) {
+      try {
+        const parsedMindmap = JSON.parse(storedMindmap);
+        console.log('Loaded mindmap from storage:', parsedMindmap);
+        setMindMapData(parsedMindmap);
+        setIsLoading(false);
+        return;
+      } catch (error) {
+        console.error('Error parsing stored mindmap:', error);
+      }
+    }
+
+    // Fallback: check if data was passed via navigation state
     const state = history.state?.state;
     if (state?.newMindmap) {
       setMindMapData(state.newMindmap);
       setIsLoading(false);
     } else {
-      // If no state data, redirect back to create page
+      // If no data available, redirect back to create page
       setLocation('/create');
     }
   }, [user, loading, setLocation]);
