@@ -7,6 +7,7 @@ import { AuthProvider } from "@/hooks/useAuth";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import Index from "./pages/Index";
 import Create from "./pages/Create";
+import View from "./pages/View";
 import Dashboard from "./pages/Dashboard";
 import History from "./pages/History";
 import Auth from "./pages/Auth";
@@ -30,6 +31,11 @@ const App = () => (
             <Route path="/create">
               <ProtectedRoute>
                 <Create />
+              </ProtectedRoute>
+            </Route>
+            <Route path="/view">
+              <ProtectedRoute>
+                <View />
               </ProtectedRoute>
             </Route>
             <Route path="/dashboard">

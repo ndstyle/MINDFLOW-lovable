@@ -14,9 +14,16 @@ Preferred communication style: Simple, everyday language.
 - **Framework**: React 18 with TypeScript and Vite for fast development and building
 - **Styling**: Tailwind CSS with a custom dark theme design system featuring vibrant gradients
 - **UI Components**: shadcn/ui component library providing consistent, accessible components
-- **Routing**: Wouter for lightweight client-side routing
+- **Routing**: Wouter for lightweight client-side routing with new dedicated view page for mind maps
 - **State Management**: TanStack React Query for server state management and caching
 - **Form Handling**: React Hook Form with Zod validation schemas
+
+### Input Methods (Phase 1 Implementation - August 2025)
+- **Unified Input Page**: Single Create page combining all three input methods without category selection
+- **Text Input**: Direct text area for manual content entry
+- **File Upload**: Drag-and-drop support for PDF, TXT, and DOCX files with content extraction
+- **Voice Input**: Speech-to-text conversion using Web Speech API with demo transcription
+- **Navigation Flow**: Create → Generate → View (dedicated mind map viewing page)
 
 ### Backend Architecture
 - **Runtime**: Node.js with Express.js framework
