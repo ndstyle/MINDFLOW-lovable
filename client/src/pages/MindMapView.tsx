@@ -53,7 +53,7 @@ export default function MindMapView() {
 
   const fetchMindMap = async () => {
     if (!mindMapId) {
-      setLocation('/library');
+      setLocation('/dashboard');
       return;
     }
 
@@ -78,7 +78,7 @@ export default function MindMapView() {
             description: "The mindmap you're looking for doesn't exist or has been deleted.",
             variant: "destructive"
           });
-          setLocation('/library');
+          setLocation('/dashboard');
           return;
         }
         throw new Error('Failed to fetch mindmap');
@@ -125,8 +125,8 @@ export default function MindMapView() {
         description: "Your mindmap has been successfully deleted."
       });
 
-      // Redirect to library
-      setLocation('/library');
+      // Redirect to dashboard
+      setLocation('/dashboard');
     } catch (error) {
       console.error('Error deleting mindmap:', error);
       toast({
@@ -206,9 +206,9 @@ export default function MindMapView() {
           <p className="text-muted-foreground mb-6">
             The mind map you're looking for doesn't exist or has been deleted.
           </p>
-          <Button onClick={() => setLocation('/library')}>
+          <Button onClick={() => setLocation('/dashboard')}>
             <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Library
+            Back to Dashboard
           </Button>
         </div>
       </div>
@@ -224,11 +224,11 @@ export default function MindMapView() {
           <div className="mb-6">
             <Button
               variant="ghost"
-              onClick={() => setLocation('/library')}
+              onClick={() => setLocation('/dashboard')}
               className="mb-4"
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Library
+              Back to Dashboard
             </Button>
 
             <div className="flex items-center justify-between mb-4">

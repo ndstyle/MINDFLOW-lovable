@@ -1,6 +1,6 @@
 import { default as Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
-import { Plus, FileText, Calendar, Trash2, Upload } from "lucide-react";
+import { Plus, Calendar, Trash2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
@@ -136,39 +136,7 @@ const Dashboard = () => {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <Card className="border-2 border-primary/20">
-              <CardHeader className="text-center space-y-4">
-                <Upload className="w-12 h-12 mx-auto text-primary" />
-                <CardTitle className="font-semibold text-foreground lowercase">upload document</CardTitle>
-                <CardDescription className="text-sm text-muted-foreground lowercase">transform PDF, TXT, or DOCX into mind maps</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Link to="/upload">
-                  <Button className="w-full lowercase">
-                    <Upload className="w-4 h-4 mr-2" />
-                    upload file
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="text-center space-y-4">
-                <FileText className="w-12 h-12 mx-auto text-accent" />
-                <CardTitle className="font-semibold text-foreground lowercase">your library</CardTitle>
-                <CardDescription className="text-sm text-muted-foreground lowercase">view all your documents and mind maps</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Link to="/library">
-                  <Button variant="outline" className="w-full lowercase">
-                    <FileText className="w-4 h-4 mr-2" />
-                    view library
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
-
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
             <Card>
               <CardHeader className="text-center space-y-4">
                 <Plus className="w-12 h-12 mx-auto text-secondary" />
@@ -214,7 +182,11 @@ const Dashboard = () => {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {mindmaps.map((mindmap) => (
-                  <Card key={mindmap.id} className="hover:shadow-md transition-shadow">
+                  <Card 
+                    key={mindmap.id} 
+                    className="cursor-pointer hover:shadow-lg transition-shadow"
+                    onClick={() => setLocation(`/mindmap/${mindmap.id}`)}
+                  >
                     <CardHeader>
                       <div className="flex items-start justify-between">
                         <div>
@@ -228,7 +200,10 @@ const Dashboard = () => {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => deleteMindMap(mindmap.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteMindMap(mindmap.id);
+                          }}
                           className="text-destructive hover:text-destructive"
                         >
                           <Trash2 className="w-4 h-4" />

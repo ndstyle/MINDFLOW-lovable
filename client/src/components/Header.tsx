@@ -38,12 +38,6 @@ const Header = () => {
           </Link>
           {user && (
             <>
-              <Link href="/library" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors lowercase">
-                library
-              </Link>
-              <Link href="/upload" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors lowercase">
-                upload document
-              </Link>
               <Link href="/create" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors lowercase">
                 create mind map
               </Link>
@@ -68,9 +62,6 @@ const Header = () => {
           )}
           {user ? (
             <>
-              <Button asChild variant="outline" className="mr-2">
-                <Link href="/upload">Upload Document</Link>
-              </Button>
               <Button asChild className="bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70">
                 <Link href="/create">Create Mind Map</Link>
               </Button>
