@@ -1,0 +1,88 @@
+PHASE 3: COMPLETE MINDMAP PERSISTENCE & LIBRARY FUNCTIONALITY
+
+CRITICAL ISSUE DIAGNOSIS:
+The current implementation has two major problems:
+
+Mind maps created via /create are NOT being saved to the Supabase database
+Authentication session management is broken causing "Error getting session" repeatedly
+Library/Dashboard pages show infinite loading because no data exists in database
+OBJECTIVE:
+Fix the complete flow from mindmap creation → database persistence → library display → individual mindmap viewing
+
+IMMEDIATE PRIORITIES:
+
+A. FIX MINDMAP CREATION & PERSISTENCE
+
+Update /api/generate-mindmap endpoint to:
+
+Accept authenticated requests (require auth middleware)
+Generate mindmap data using OpenAI
+SAVE the mindmap to Supabase mindmaps table
+Return the saved mindmap with proper ID
+Update Create page to:
+
+Send authenticated requests to generate-mindmap endpoint
+Handle the returned mindmap data properly
+Store in sessionStorage AND save to database
+Navigate to the proper mindmap view page using the database ID
+B. FIX AUTHENTICATION & SESSION MANAGEMENT
+
+Fix session retrieval errors in:
+
+Dashboard.tsx
+Library.tsx
+All pages showing "Error getting session"
+Ensure proper token handling in:
+
+API calls to /api/mindmaps endpoints
+Authentication middleware on server side
+C. COMPLETE LIBRARY & VIEW FUNCTIONALITY
+
+Fix Library page to:
+
+Properly fetch mindmaps from database
+Display both Documents and Mind Maps tabs
+Show actual mindmap cards with correct data
+Link to individual mindmap view pages
+Ensure MindMapView page works with:
+
+Database-stored mindmaps (not just sessionStorage)
+Proper mindmap visualization
+Delete functionality
+Export/share features
+TECHNICAL REQUIREMENTS:
+
+Server-side (routes.ts):
+
+// Fix /api/generate-mindmap to require auth and save to database
+app.post('/api/generate-mindmap', requireAuth, async (req, res) => {
+  // Generate with OpenAI
+  // Save to mindmaps table with owner_id = req.user.id
+  // Return saved mindmap
+});
+Database Integration:
+
+Ensure mindmaps are saved with proper owner_id
+Verify RLS policies allow user to access their own mindmaps
+Test mindmap retrieval with proper authentication
+Frontend Flow:
+
+Create page → Generate → Save to DB → Navigate to /mindmap/:id
+Library page → Fetch from DB → Display cards → Link to /mindmap/:id
+Dashboard → Show recent mindmaps from DB
+SUCCESS CRITERIA:
+
+User can create mindmap and it appears in database
+Library page shows created mindmaps (not infinite loading)
+Clicking mindmap card opens individual view page
+Delete functionality works and removes from database
+No more "Error getting session" logs
+Mind Maps tab shows count > 0 when mindmaps exist
+TESTING STEPS:
+
+Create a new mindmap via /create
+Verify it appears in Supabase mindmaps table
+Check Library page shows the mindmap in Mind Maps tab
+Click mindmap card to view individual mindmap
+Test delete functionality
+Fix the complete end-to-end flow from creation to persistence to display. The infinite loading and empty library indicate data is not being saved to the database properly.
