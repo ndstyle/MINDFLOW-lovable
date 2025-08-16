@@ -30,6 +30,12 @@ export const VoiceInput = ({ onTranscription, disabled }: VoiceInputProps) => {
         return;
       }
 
+      // Check if we're in Replit's environment
+      if (window.location.hostname.includes('replit.dev')) {
+        toast.error("Voice input may not work reliably in Replit's preview environment. Please use text input instead.");
+        return;
+      }
+
       const recognition = new SpeechRecognition();
       recognitionRef.current = recognition;
 
@@ -59,8 +65,12 @@ export const VoiceInput = ({ onTranscription, disabled }: VoiceInputProps) => {
           toast.error("No speech detected. Please try again.");
         } else if (event.error === 'not-allowed') {
           toast.error("Microphone access denied. Please allow microphone permissions.");
+        } else if (event.error === 'network') {
+          toast.error("Speech recognition unavailable - network error. This feature may not work in Replit's preview environment. Please use text input instead.");
+        } else if (event.error === 'service-not-allowed') {
+          toast.error("Speech recognition service blocked. This feature requires HTTPS in production.");
         } else {
-          toast.error("Speech recognition failed. Please try again.");
+          toast.error(`Speech recognition failed: ${event.error}. Please try text input instead.`);
         }
       };
 
