@@ -1,0 +1,87 @@
+ISSUE: Mind map generation appears to be stuck on "Generating Mind Map..." without completing or showing errors.
+
+REQUIRED INVESTIGATION & FIXES:
+
+1. BACKEND API DEBUGGING:
+
+Check if /api/generate-mindmap endpoint is actually receiving requests
+Add comprehensive logging to track request flow in server/routes.ts
+Verify OpenAI API key is properly configured and working
+Test OpenAI API response parsing and error handling
+Ensure database saves are working correctly
+Add timeout handling for OpenAI requests
+2. FRONTEND REQUEST DEBUGGING:
+
+Add detailed console logging to track the entire request flow in Create.tsx
+Verify authentication headers are being sent correctly
+Add proper error boundaries and timeout handling
+Check if the request is actually being sent to the backend
+3. AUTHENTICATION FLOW VERIFICATION:
+
+Verify Supabase session is valid before making API calls
+Check if auth tokens are being passed correctly in headers
+Ensure user profile exists and is accessible
+4. COMPREHENSIVE TESTING REQUIREMENTS:
+
+AGENT MUST TEST ALL OF THESE SCENARIOS:
+
+a) Happy Path Testing:
+
+Enter text → Click Generate → Verify request is sent → Verify backend receives request → Verify OpenAI responds → Verify database save → Verify navigation to mindmap view
+b) Error Scenario Testing:
+
+Test with invalid/missing OpenAI API key
+Test with network connectivity issues
+Test with malformed text input
+Test with authentication failures
+Test database connection failures
+c) User Experience Testing:
+
+Verify loading states work correctly
+Verify error messages are shown to user
+Verify success navigation works
+Test button states (disabled during loading)
+5. DEBUGGING IMPLEMENTATION:
+
+Add these debugging logs throughout the flow:
+
+Frontend: Request start, request payload, response received, error caught
+Backend: Request received, auth verified, OpenAI call start, OpenAI response, database save, final response
+Include timestamps and request IDs for tracing
+6. FIX IMPLEMENTATION:
+
+Once issues are identified:
+
+Fix any broken API endpoints
+Add proper error handling and user feedback
+Implement request timeouts (30 seconds max)
+Add retry logic for transient failures
+Ensure proper state management in frontend
+7. VALIDATION TESTING CHECKLIST:
+
+AGENT MUST VERIFY ALL OF THESE WORK:
+✓ Text input → Generate button → Loading state → Success navigation
+✓ Network error → Proper error message shown to user
+✓ Invalid input → Validation error shown
+✓ Authentication failure → Redirect to auth page
+✓ Database error → Error message with retry option
+✓ OpenAI API failure → Fallback or error handling
+✓ Timeout scenarios → Proper timeout handling
+✓ Mind map loads correctly after generation
+✓ User can navigate back to dashboard
+✓ Generated mindmap appears in dashboard list
+
+CRITICAL: Agent must actually test each scenario by:
+
+Making real requests with real data
+Checking network tab for request/response details
+Verifying database records are created
+Testing error scenarios by simulating failures
+Confirming user experience from start to finish
+DO NOT CONSIDER TASK COMPLETE UNTIL:
+
+All debugging logs are implemented
+Root cause is identified and fixed
+All test scenarios pass with real data
+User experience flows smoothly end-to-end
+Proper error handling exists for all failure modes
