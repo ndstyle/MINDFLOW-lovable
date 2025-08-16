@@ -1,0 +1,115 @@
+Do not begin coding yet.
+
+Your first step is to propose a complete, detailed build plan and implementation strategy for developing our full MVP, including backend, frontend, and all supporting infrastructure and UI, based on the comprehensive product specification below.  
+Most features do not exist in our current code — you are starting from near-scratch for all functional areas besides the landing page.
+
+**CRITICAL DESIGN REQUIREMENT:**  
+The current landing page UI (see attached screenshot) MUST remain visually and interactively identical.  
+- Do not change colors, fonts, layout, button placement, or core messaging.
+- Any modification to this landing page beyond small bugfixes or copy edits requires my explicit approval before implementation.
+- All additional app pages/features may use new designs/layouts, but the home page must always preserve this established look and feel.
+
+---
+
+**Features and Explicit Requirements for Your Plan**
+
+1. **Ingestion & Parsing**
+   - Accept only: PDF (≤10 pages), URLs (≤5,000 words), YouTube videos (≤15min with captions), and plain text input.
+   - Enforce English-only: auto-detect language on upload, display user warning or error for non-English input.
+   - OCR: allow fallback for scanned PDFs where possible; clearly communicate OCR status to user.
+   - Chunking: Split content structurally (by headings/sections/slides) and semantically (≈800–1,200 tokens per chunk).
+   - Store metadata (page_count, word_count, chunk_count, language, processing_notes) in Supabase.
+
+2. **Mind Map Generation**
+   - Cluster document chunks via embeddings and hierarchical clustering to exactly three levels: Topic (root), Concept (inner), Leaf (atomic fact/example).
+   - Enforce global max: no more than 100 nodes generated for any document (merge small/low-value clusters to comply).
+   - Mind maps must be visually appealing and interactive:
+       - Each node: clear labels, concise summaries, key terms, and source anchors (page#/timestamp).
+       - Render mind map using smooth canvas/SVG visuals, animated transitions, scalable/pannable/zoomable view.
+       - Use modern effects (e.g. gradient node colors, relationship lines, node hover popups).
+   - UI: expand/collapse nodes, search bar/filter, click to focus/view source snippet.
+   - Color-coded overlays based on mastery (red/amber/green).
+
+3. **Quiz Generation**
+   - For each node, auto-generate 3–7 high-quality questions:
+       - v0.1: Multiple Choice (1 correct + 3 strong distractors from sibling/related content).
+       - v0.2+: Cloze (fill-in-the-blank), Short Answer ("define"/"explain" in ≤30 words).
+   - Evidence anchors: Every question must report supporting passages with page/timestamp and direct quote anchors.
+   - Strict vs. lenient grading:
+       - Strict: exact match, normalized.
+       - Lenient: accept synonyms and minor typos (LLM + WordNet).
+   - Deduplicate similar questions using semantic similarity.
+   - Validate questions for clarity, no ambiguous answers, and no "all/none of the above" distractors.
+   - Optionally import quiz data from Quizlet (v0.3+).
+
+4. **Study Modes**
+   - Practice: Immediate feedback, explanation, link to evidence anchor.
+   - Learn: Adaptive repetition based on mastery; interleaves question types with focus on weak nodes.
+   - Test: Timed assessments, score/report at end.
+   - Support: Drill on node/branch scope OR entire document.
+   - Quiz player UI: mode toggle, timer, strict/lenient grading, next/flag/view source, session summary screen.
+
+5. **Mastery and SRS**
+   - Each node: dynamic mastery score (0–100), computed with exponential moving average weighted by difficulty/recency.
+   - SRS Lite: Schedule next review for weak nodes with spaced intervals (1d, 3d, 7d, 16d, 35d, adjustable by result quality).
+   - Session history, "next review" queue.
+
+6. **Analytics and Progress**
+   - Heatmap overlays of node mastery.
+   - Track session accuracy, frequency, time spent per node and document.
+   - Dashboard view for reviewing learning trends, upcoming SRS sessions, missed questions.
+   - Export analytics for user.
+
+7. **Export and Share**
+   - Map export: PNG (matching UI "coolness"), PDF, Markdown—choose node scope.
+   - Quiz/test export: printable PDF w/ answer key.
+   - Generate and manage read-only share links for maps & node-level quizzes.
+   - All files stored via Supabase Storage.
+
+8. **API Surface**
+   - Endpoints matching spec: `/ingest/upload`, `/parse/{doc_id}`, `/map/{doc_id}`, `/quiz/generate/{node_id}`, `/session/start`, `/progress/{doc_id}`, `/export/*`, `/import/quizlet`, etc.
+
+9. **Database**
+   - Supabase Postgres schema as per MVP, with: users/auth, documents, chunks, nodes, edges, questions, attempts, reviews, plus all relevant keys and stats fields.
+
+10. **Frontend Structure**
+    - Next.js + React + Tailwind, shadcn/ui, Zustand for state management.
+    - Landing page (unchanged), plus:
+        - Home/Library, Map, Quiz Player, Analytics, Export/Share screens.
+    - All major UI/UX features as detailed above, including modern interactive mind map rendering.
+
+11. **Infrastructure and Integrations**
+    - Use Supabase Auth, Postgres, Storage.
+    - Integrate OpenAI/Claude for summarization and question generation.
+    - Async job queue for all heavy tasks (parsing, map/gen, QG).
+    - Redis for caching heavy intermediate results if needed.
+
+12. **Quality Guardrails and KPIs**
+    - Validator for every generated question: checks explicit evidence, anchors, ambiguity.
+    - Ingest processing SLA: fail-fast on invalid files, sub-45s target for legal PDFs.
+    - Privacy: all user uploads private, share links signed/expiring.
+
+13. **Roadmap and Milestone Deliverables**
+    - v0.1: PDF/URL/YouTube ingestion, clustering, appealing map UI, MCQ only, practice mode, PNG export.
+    - v0.2: Add cloze/short answer, learn mode, lenient grading, SRS, PDF test export.
+    - v0.3, v1.0: Analytics dashboard, quizlet import, markdown export, test mode, sharing features.
+
+---
+
+**Detailed planning required:**
+
+For each feature and milestone above, specify the following:
+  - What code modules and files you will create (frontend, backend, async workers, DB migrations, etc.).
+  - How you will enforce all content limits (language, page, node) and validate upstream.
+  - Dependencies and external services/APIs.
+  - Frontend UI component breakdown (including tech/design for cool mind map rendering).
+  - Detailed endpoints and request/response design.
+  - Testing and documentation plan for all new code.
+  - Risks for design, scale, performance, external APIs, Supabase limits, UI rendering; propose mitigation for each.
+  - How you will maintain modular, clean, maintainable code for each subsystem.
+  - How all new features, screens, and UI will seamlessly integrate with the *preserved* landing page design.
+
+**STOP and ask me:**
+> "Do you approve this full, detailed build plan and implementation strategy—including full preservation of the landing page UI—before I begin building?"
+
+Do not begin implementing until I respond and approve.
