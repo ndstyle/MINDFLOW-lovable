@@ -8,37 +8,58 @@ const openai = new OpenAI({
 export class MindMapGenerator {
   async generateMindMap(documentId: string, content: string) {
     try {
-      // Generate mind map structure using OpenAI
+      // Generate mind map structure using OpenAI with specific constraints for reference design
       const prompt = `
-        Create a comprehensive mind map structure from the following document content. 
-        Generate exactly 1 main topic, 3-5 key concepts, and 2-3 specific details for each concept.
-        Format as JSON with this structure:
+        Create a mind map structure that matches EXACTLY this layout specification:
+        - 1 root topic positioned on the left
+        - 3-5 main concepts branching to the right
+        - 2-3 sub-concepts for each main concept
+        - NO deeper nesting beyond level 2 (root → main → sub)
+        - Assign distinct colors to different branch families
+        
+        Return JSON with this EXACT structure:
         {
           "title": "Main Topic Title",
           "nodes": [
             {
-              "id": "node_1",
+              "id": "root",
               "title": "Main Topic",
-              "content": "Brief summary of main topic",
+              "content": "Brief description",
               "level": 0,
-              "parent_id": null
+              "parent_id": null,
+              "color": "#8B5CF6",
+              "x": 150,
+              "y": 300
             },
             {
-              "id": "node_2", 
+              "id": "concept_1", 
               "title": "Key Concept 1",
               "content": "Description of concept",
               "level": 1,
-              "parent_id": "node_1"
+              "parent_id": "root",
+              "color": "#06B6D4",
+              "x": 400,
+              "y": 200
             },
             {
-              "id": "node_3",
-              "title": "Specific Detail",
+              "id": "sub_1_1",
+              "title": "Sub Concept",
               "content": "Detailed explanation",
               "level": 2,
-              "parent_id": "node_2"
+              "parent_id": "concept_1",
+              "color": "#06B6D4",
+              "x": 650,
+              "y": 150
             }
           ]
         }
+
+        Use these colors for different branch families:
+        - Purple (#8B5CF6) for root
+        - Cyan (#06B6D4) for first branch family
+        - Emerald (#10B981) for second branch family  
+        - Amber (#F59E0B) for third branch family
+        - Red (#EF4444) for fourth branch family
 
         Document content:
         ${content.substring(0, 4000)}
@@ -49,7 +70,7 @@ export class MindMapGenerator {
         messages: [
           {
             role: "system",
-            content: "You are an expert at creating educational mind maps. Generate structured, hierarchical mind maps that facilitate learning."
+            content: "You are an expert at creating educational mind maps. Generate ONLY the JSON structure requested with exact positioning for left-to-right radial layout. Stop at level 2 maximum."
           },
           {
             role: "user",
@@ -67,11 +88,22 @@ export class MindMapGenerator {
 
       let mindMapData;
       try {
-        mindMapData = JSON.parse(result);
+        // Clean response if it contains code blocks
+        let cleanResult = result;
+        if (cleanResult.includes('```json')) {
+          cleanResult = cleanResult.replace(/```json\n?/g, '').replace(/```\n?/g, '');
+        }
+        if (cleanResult.includes('```')) {
+          cleanResult = cleanResult.replace(/```/g, '');
+        }
+        mindMapData = JSON.parse(cleanResult);
       } catch (parseError) {
         console.error('Failed to parse OpenAI response:', result);
         throw new Error('Invalid response format from AI');
       }
+
+      // Ensure proper left-to-right positioning if AI didn't follow exactly
+      mindMapData.nodes = this.ensureProperPositioning(mindMapData.nodes);
 
       // Save nodes to database
       const nodeInserts = mindMapData.nodes.map((node: any) => ({
@@ -79,10 +111,14 @@ export class MindMapGenerator {
         title: node.title,
         summary: node.content,
         level: node.level,
-        position_x: this.calculatePosition(node.level, node.id).x,
-        position_y: this.calculatePosition(node.level, node.id).y,
+        position_x: node.x,
+        position_y: node.y,
         parent_id: node.parent_id,
-        metadata: { ai_generated: true, node_id: node.id }
+        metadata: { 
+          ai_generated: true, 
+          node_id: node.id,
+          color: node.color
+        }
       }));
 
       const { data: nodes, error: nodeError } = await supabase
@@ -123,6 +159,66 @@ export class MindMapGenerator {
 
       throw error;
     }
+  }
+
+  private ensureProperPositioning(nodes: any[]): any[] {
+    // Colors for different branch families
+    const branchColors = [
+      '#8B5CF6', // Purple for root
+      '#06B6D4', // Cyan
+      '#10B981', // Emerald  
+      '#F59E0B', // Amber
+      '#EF4444'  // Red
+    ];
+
+    let colorIndex = 0;
+    const processedNodes = nodes.map(node => {
+      // Assign proper positioning based on level
+      if (node.level === 0) {
+        // Root node on the left
+        return {
+          ...node,
+          x: 150,
+          y: 300,
+          color: branchColors[0]
+        };
+      } else if (node.level === 1) {
+        // Main concepts spread vertically to the right
+        colorIndex++;
+        const branchIndex = nodes.filter(n => n.level === 1).indexOf(node);
+        const totalBranches = nodes.filter(n => n.level === 1).length;
+        const spacing = 120;
+        const startY = 300 - (totalBranches - 1) * spacing / 2;
+        
+        return {
+          ...node,
+          x: 400,
+          y: startY + branchIndex * spacing,
+          color: branchColors[colorIndex % branchColors.length]
+        };
+      } else if (node.level === 2) {
+        // Sub-concepts further to the right
+        const parent = nodes.find(n => n.id === node.parent_id);
+        const parentColor = parent ? processedNodes.find(n => n.id === parent.id)?.color || branchColors[1] : branchColors[1];
+        const siblingIndex = nodes.filter(n => n.level === 2 && n.parent_id === node.parent_id).indexOf(node);
+        const siblingCount = nodes.filter(n => n.level === 2 && n.parent_id === node.parent_id).length;
+        
+        const parentY = parent ? processedNodes.find(n => n.id === parent.id)?.y || 300 : 300;
+        const subSpacing = 80;
+        const startY = parentY - (siblingCount - 1) * subSpacing / 2;
+        
+        return {
+          ...node,
+          x: 650,
+          y: startY + siblingIndex * subSpacing,
+          color: parentColor
+        };
+      }
+      
+      return node;
+    });
+
+    return processedNodes;
   }
 
   private calculatePosition(level: number, nodeId: string): { x: number, y: number } {

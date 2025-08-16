@@ -389,6 +389,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ error: 'OpenAI API key not configured' });
       }
 
+      // New improved prompt for reference design matching
+      const prompt = `
+        Create a mind map structure that matches EXACTLY this layout specification:
+        - 1 root topic positioned on the left
+        - 3-5 main concepts branching to the right
+        - 2-3 sub-concepts for each main concept  
+        - NO deeper nesting beyond level 2 (root → main → sub)
+        - Assign distinct colors to different branch families
+        
+        Return JSON with this EXACT structure:
+        {
+          "title": "Main Topic Title",
+          "nodes": [
+            {
+              "id": "root",
+              "title": "Main Topic",
+              "content": "Brief description",
+              "level": 0,
+              "parent_id": null,
+              "color": "#8B5CF6",
+              "x": 150,
+              "y": 300
+            },
+            {
+              "id": "concept_1", 
+              "title": "Key Concept 1",
+              "content": "Description of concept",
+              "level": 1,
+              "parent_id": "root",
+              "color": "#06B6D4",
+              "x": 400,
+              "y": 200
+            },
+            {
+              "id": "sub_1_1",
+              "title": "Sub Concept",
+              "content": "Detailed explanation",
+              "level": 2,
+              "parent_id": "concept_1",
+              "color": "#06B6D4",
+              "x": 650,
+              "y": 150
+            }
+          ]
+        }
+
+        Use these colors for different branch families:
+        - Purple (#8B5CF6) for root
+        - Cyan (#06B6D4) for first branch family
+        - Emerald (#10B981) for second branch family  
+        - Amber (#F59E0B) for third branch family
+        - Red (#EF4444) for fourth branch family
+
+        Content: ${text}
+      `;
+
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -400,14 +456,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           messages: [
             {
               role: 'system',
-              content: `You are an AI that creates mind maps for ${category} purposes. Create a structured mind map from the user's input. Return a JSON object with a "nodes" array. Each node should have: id, text, x, y, level (0=center, 1=main branches, 2=sub-branches), and children (array of child node IDs).`
+              content: 'You are an expert at creating educational mind maps. Generate ONLY the JSON structure requested with exact positioning for left-to-right radial layout. Stop at level 2 maximum.'
             },
             {
               role: 'user',
-              content: text
+              content: prompt
             }
           ],
-          max_tokens: 1500,
+          max_tokens: 2000,
           temperature: 0.7,
         }),
       });
@@ -432,13 +488,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
         cleanContent = cleanContent.replace(/```/g, '');
       }
 
-      const mindmapData = JSON.parse(cleanContent);
+      let mindmapData = JSON.parse(cleanContent);
+      
+      // Ensure proper positioning and colors
+      mindmapData.nodes = ensureProperPositioning(mindmapData.nodes);
+      
       res.json(mindmapData);
     } catch (error) {
       console.error('Generate mindmap error:', error);
       res.status(500).json({ error: 'Failed to generate mindmap' });
     }
   });
+
+  // Helper function for proper positioning
+  function ensureProperPositioning(nodes: any[]): any[] {
+    const branchColors = [
+      '#8B5CF6', // Purple for root
+      '#06B6D4', // Cyan
+      '#10B981', // Emerald  
+      '#F59E0B', // Amber
+      '#EF4444'  // Red
+    ];
+
+    let colorIndex = 0;
+    return nodes.map(node => {
+      if (node.level === 0) {
+        return { ...node, x: 150, y: 300, color: branchColors[0] };
+      } else if (node.level === 1) {
+        colorIndex++;
+        const branchIndex = nodes.filter(n => n.level === 1).indexOf(node);
+        const totalBranches = nodes.filter(n => n.level === 1).length;
+        const spacing = 120;
+        const startY = 300 - (totalBranches - 1) * spacing / 2;
+        
+        return {
+          ...node,
+          x: 400,
+          y: startY + branchIndex * spacing,
+          color: branchColors[colorIndex % branchColors.length]
+        };
+      } else if (node.level === 2) {
+        const parent = nodes.find(n => n.id === node.parent_id);
+        const parentColor = parent?.color || branchColors[1];
+        const siblingIndex = nodes.filter(n => n.level === 2 && n.parent_id === node.parent_id).indexOf(node);
+        const siblingCount = nodes.filter(n => n.level === 2 && n.parent_id === node.parent_id).length;
+        
+        const parentY = parent ? nodes.find(n => n.id === parent.id)?.y || 300 : 300;
+        const subSpacing = 80;
+        const startY = parentY - (siblingCount - 1) * subSpacing / 2;
+        
+        return {
+          ...node,
+          x: 650,
+          y: startY + siblingIndex * subSpacing,
+          color: parentColor
+        };
+      }
+      return node;
+    });
+  }
 
   app.post('/api/chat-assistant', async (req, res) => {
     try {

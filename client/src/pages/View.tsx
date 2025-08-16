@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ArrowLeft, Share2, Download, Edit3 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { default as Header } from '@/components/Header';
+import { MindMapVisualization } from '@/components/MindMapVisualization';
 
 interface MindMapData {
   title: string;
@@ -125,53 +126,36 @@ export default function View() {
                 <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent mb-2">
                   {mindMapData.title}
                 </h1>
-                <p className="text-xl text-muted-foreground">
-                  {mindMapData.intent && `Purpose: ${mindMapData.intent}`}
-                </p>
+                {mindMapData.intent && (
+                  <p className="text-muted-foreground">
+                    Category: {mindMapData.intent}
+                  </p>
+                )}
+                {mindMapData.created_at && (
+                  <p className="text-sm text-muted-foreground">
+                    Created: {new Date(mindMapData.created_at).toLocaleDateString()}
+                  </p>
+                )}
               </div>
-              
+
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={handleShare}>
+                <Button variant="outline" onClick={handleShare}>
                   <Share2 className="w-4 h-4 mr-2" />
                   Share
                 </Button>
-                <Button variant="outline" size="sm" onClick={handleDownload}>
+                <Button variant="outline" onClick={handleDownload}>
                   <Download className="w-4 h-4 mr-2" />
-                  Download
-                </Button>
-                <Button size="sm" onClick={() => setLocation('/create')}>
-                  <Edit3 className="w-4 h-4 mr-2" />
-                  Create New
+                  Export JSON
                 </Button>
               </div>
             </div>
-          </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Mind Map Visualization</CardTitle>
-              <CardDescription>
-                Your ideas transformed into a structured mind map
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="min-h-[600px] border rounded-lg bg-muted/10 p-4">
-                {/* Mind Map Visualization Component will go here */}
-                <div className="text-center text-muted-foreground py-20">
-                  <p className="text-lg mb-4">Mind Map Viewer</p>
-                  <p className="text-sm">Interactive mind map visualization will be displayed here</p>
-                  
-                  {/* For now, show the raw data structure */}
-                  <div className="mt-8 text-left max-w-2xl mx-auto">
-                    <h3 className="font-semibold mb-4">Generated Structure:</h3>
-                    <pre className="bg-background border rounded p-4 text-xs overflow-auto max-h-60">
-                      {JSON.stringify(mindMapData.content, null, 2)}
-                    </pre>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+            {/* Mind Map Visualization */}
+            <MindMapVisualization 
+              nodes={mindMapData.content.nodes || []}
+              title={mindMapData.title}
+            />
+          </div>
         </div>
       </main>
     </div>
