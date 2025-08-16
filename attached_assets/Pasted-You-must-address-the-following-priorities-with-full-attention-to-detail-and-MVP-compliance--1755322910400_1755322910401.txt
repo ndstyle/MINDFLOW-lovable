@@ -1,0 +1,87 @@
+You must address the following priorities with full attention to detail and MVP compliance:
+
+---
+
+**1. FULL MVP CLARITY AND FEATURE DELIVERY**
+
+- If you do not understand ANY aspect of the MVP requirements—feature, workflow, visual, data, or UI—pause and ASK CLARIFYING QUESTIONS before proposing, planning, or coding.
+- You are responsible for reading the original full MVP specification, ALL clarification answers, all screenshots, and all client instructions provided so far.
+- If you believe any feature is ambiguous, undefined, or has multiple possible interpretations, enumerate your questions and wait for responses. Do NOT guess or assume.
+
+---
+
+**2. REBRANDING & NAMING**
+
+- Change every reference of “mindflow” to “quicklearned” everywhere: code comments, repo name, UI text, endpoints, meta tags, browser tab/title, email templates, share/export screens, etc.
+- Update logo/branding visual in UI as appropriate. If an image asset or logo is missing, ask for one or use a placeholder.
+
+---
+
+**3. UI/UX NAVIGATION & PAGE STRUCTURE**
+
+- Audit ALL navigation and quickly eliminate any duplicate, confusing, or extraneous navbar items (like “history” vs “History”, excessive links).
+- Navigation bar must be simple, clear, and match MVP—not a prototype or code artifact.
+    - Minimum: Home, Library, Upload Document, Create Mind Map, with user login/logout. Don’t add “history” unless you confirm it is truly different content and needed by MVP spec.
+    - No dead links/placeholders. Every navigation item must link to a real, functional page, or be removed.
+
+---
+
+**4. UPLOAD UX AND DOCUMENT PROCESSING**
+
+- Fix the upload page UI: Only the intended dropzone card or button triggers file upload—nowhere else on the page should, ever.
+- All upload errors (invalid format, >10 pages, language not English, backend failure, etc) must be properly surfaced in the UI, not just console logs.
+- Uploaded documents, once processed, must show up in Library/Dashboard/History. “Loading mind maps…” or “Loading documents…” must not persist indefinitely. If there are no docs/maps, show helpful empty state messaging.
+
+---
+
+**5. MIND MAPS: VISUAL, INTERACTIVE, FUNCTIONAL**
+
+- Mind maps must be visually modern, cool, and interactive per MVP: animated layout, clear topics/concepts/leaves, attractive gradients/colors/themes as instructed, expand/collapse, source anchors, mastery colors, clickable nodes, etc.
+- Do not ship basic unstyled trees, plain lists, or minimal SVG blobs—this is a core app value, not a placebo feature.
+- After creation, mind maps must be easily opened and viewed from Library/History or immediately post-processing.
+
+---
+
+**6. QUIZZING: COMPLETE AND ACCESSIBLE**
+
+- Quiz generation and interactive quiz play must be present in the frontend UI and accessible from main user flows (e.g., Library –> Mind Map –> “Quiz Me”).
+    - Users must be able to start, answer, and see feedback for quizzes, including strict/lenient grading, evidence anchors, and mastery/progress updates.
+    - Do not list “quiz implemented” or “SRS implemented” unless a user can actually run a session visibly on the site.
+
+---
+
+**7. EXPORT AND SHARE**
+
+- Exports of mind map and quizzes (PDF, Markdown, etc.) and sharing links must be accessible from real UI controls (buttons, menu items) and lead to actual downloads, not just backend stubs.  
+- Exported maps should be simplified and readable, with clear branding.
+
+---
+
+**8. AUTHENTICATION**
+
+- All pages except the landing page require user login.  
+- Supabase auth must be fixed—no social auth, just working signup/login/logout with clear error/success states.  
+- After login, all new features flow as described in MVP.
+
+---
+
+**9. QA AND FULL E2E DEMONSTRATION**
+
+- For all claims of “✓ implemented,” verify that a user can (a) access the feature from navigation, (b) use it as intended, and (c) observe visible feedback/UI results.
+- Pages must never be stuck “loading…” if there is no data.
+- Run through a typical user journey on each MVP flow: upload → process → mind map → quiz → export/share, and fix any missing/broken pieces.
+
+---
+
+**10. CLARIFICATION, COMMUNICATION, AND APPROVALS**
+
+- Before making ANY further change:
+    - List (in numbered bullets) all unclear requirements or feature questions you still have, even if minor.
+    - Present a FULL, step-by-step plan for rebranding, UI cleanup, navigation fixes, transforming backend features into real UI, and ensuring every MVP feature is demonstrably complete.
+    - For each planned step, specify: which files/pages/components will be affected, what end-user behavior or UI will change, and what done/working looks like.
+- Only after reviewing your detailed plan and confirming you have no confusion about MVP, branding, feature completeness, or demo requirements, ask:
+    > “Do you approve this detailed remediation and build completion plan for quicklearned MVP? May I proceed?”
+
+---
+
+If at any stage you are unsure or believe MVP requirements are not fully clear, pause and ASK—all ambiguity must be resolved before coding continues.
