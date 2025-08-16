@@ -289,6 +289,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get individual mindmap by ID
+  app.get('/api/mindmaps/:id', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+
+      const { data: mindmap, error } = await supabase
+        .from('mindmaps')
+        .select('*')
+        .eq('id', id)
+        .eq('owner_id', req.user!.id) // Ensure user can only access their own mindmaps
+        .single();
+
+      if (error) {
+        if (error.code === 'PGRST116') {
+          return res.status(404).json({ error: 'Mindmap not found' });
+        }
+        return res.status(500).json({ error: error.message });
+      }
+
+      res.json(mindmap);
+    } catch (error) {
+      console.error('Get mindmap error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
   app.post('/api/mindmaps', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { title, intent, content } = req.body;

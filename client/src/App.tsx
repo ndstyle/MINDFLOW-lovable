@@ -8,6 +8,7 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import Index from "./pages/Index";
 import Create from "./pages/Create";
 import View from "./pages/View";
+import MindMapView from "./pages/MindMapView";
 import Dashboard from "./pages/Dashboard";
 import History from "./pages/History";
 import Auth from "./pages/Auth";
@@ -61,6 +62,11 @@ const App = () => (
             <Route path="/document/:id">
               <ProtectedRoute>
                 <Document />
+              </ProtectedRoute>
+            </Route>
+            <Route path="/mindmap/:id">
+              <ProtectedRoute>
+                <MindMapView />
               </ProtectedRoute>
             </Route>
             <Route component={NotFound} />
