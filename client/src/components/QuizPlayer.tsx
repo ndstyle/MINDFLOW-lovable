@@ -1,187 +1,171 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { CheckCircle, XCircle, RotateCcw, Play } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { CheckCircle, XCircle, RotateCcw, ArrowRight, Brain, Trophy } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/lib/supabase';
 
 interface Question {
   id: string;
   question: string;
-  correct_answer: string;
-  distractors: string[];
-  evidence_anchor: string;
-  type: 'mcq' | 'cloze' | 'short_answer';
+  options: string[];
+  correct_answer: number;
+  explanation?: string;
+  difficulty?: 'easy' | 'medium' | 'hard';
 }
 
 interface QuizPlayerProps {
   questions: Question[];
   documentId: string;
-  onComplete?: () => void;
 }
 
-export function QuizPlayer({ questions, documentId, onComplete }: QuizPlayerProps) {
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [selectedAnswer, setSelectedAnswer] = useState<string>('');
-  const [showResult, setShowResult] = useState(false);
-  const [quizComplete, setQuizComplete] = useState(false);
+export function QuizPlayer({ questions, documentId }: QuizPlayerProps) {
+  const [currentQuestion, setCurrentQuestion] = useState(0);
+  const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
+  const [showAnswer, setShowAnswer] = useState(false);
   const [score, setScore] = useState(0);
-  const [answers, setAnswers] = useState<{ questionId: string; correct: boolean; userAnswer: string }[]>([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [answers, setAnswers] = useState<(number | null)[]>([]);
+  const [quizCompleted, setQuizCompleted] = useState(false);
   const { toast } = useToast();
 
-  const currentQuestion = questions[currentQuestionIndex];
-  
-  // Shuffle answers for multiple choice
-  const [shuffledOptions, setShuffledOptions] = useState<string[]>([]);
-  
   useEffect(() => {
-    if (currentQuestion && currentQuestion.type === 'mcq') {
-      const options = [currentQuestion.correct_answer, ...currentQuestion.distractors];
-      setShuffledOptions(options.sort(() => Math.random() - 0.5));
+    if (questions.length > 0) {
+      setAnswers(new Array(questions.length).fill(null));
     }
-  }, [currentQuestion]);
+  }, [questions.length]);
 
-  const handleAnswerSubmit = async () => {
-    if (!selectedAnswer.trim()) {
-      toast({
-        title: "Please select an answer",
-        description: "Choose an answer before submitting.",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    setIsSubmitting(true);
-
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) {
-        throw new Error('Not authenticated');
-      }
-
-      const response = await fetch(`/api/quiz/${currentQuestion.id}/answer`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
-        },
-        body: JSON.stringify({ answer: selectedAnswer })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to submit answer');
-      }
-
-      const result = await response.json();
-      
-      // Update score and answers
-      if (result.isCorrect) {
-        setScore(prev => prev + 1);
-      }
-
-      setAnswers(prev => [...prev, {
-        questionId: currentQuestion.id,
-        correct: result.isCorrect,
-        userAnswer: selectedAnswer
-      }]);
-
-      setShowResult(true);
-
-      // Show feedback toast
-      toast({
-        title: result.isCorrect ? "Correct!" : "Incorrect",
-        description: result.explanation,
-        variant: result.isCorrect ? "default" : "destructive"
-      });
-
-    } catch (error) {
-      console.error('Submit answer error:', error);
-      toast({
-        title: "Error submitting answer",
-        description: "Please try again.",
-        variant: "destructive"
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
+  const handleAnswerSelect = (answerIndex: number) => {
+    if (showAnswer) return;
+    setSelectedAnswer(answerIndex);
   };
 
-  const handleNext = () => {
-    if (currentQuestionIndex < questions.length - 1) {
-      setCurrentQuestionIndex(prev => prev + 1);
-      setSelectedAnswer('');
-      setShowResult(false);
+  const handleSubmitAnswer = () => {
+    if (selectedAnswer === null) return;
+
+    const newAnswers = [...answers];
+    newAnswers[currentQuestion] = selectedAnswer;
+    setAnswers(newAnswers);
+
+    const isCorrect = selectedAnswer === questions[currentQuestion].correct_answer;
+    if (isCorrect && answers[currentQuestion] === null) {
+      setScore(prev => prev + 1);
+    }
+
+    setShowAnswer(true);
+
+    if (isCorrect) {
+      toast({
+        title: "Correct!",
+        description: "Well done, that's the right answer.",
+      });
     } else {
-      setQuizComplete(true);
-      onComplete?.();
+      toast({
+        title: "Incorrect",
+        description: "Don't worry, you'll get the next one!",
+        variant: "destructive"
+      });
     }
   };
 
-  const handleRestart = () => {
-    setCurrentQuestionIndex(0);
-    setSelectedAnswer('');
-    setShowResult(false);
-    setQuizComplete(false);
+  const handleNextQuestion = () => {
+    if (currentQuestion < questions.length - 1) {
+      setCurrentQuestion(prev => prev + 1);
+      setSelectedAnswer(answers[currentQuestion + 1]);
+      setShowAnswer(answers[currentQuestion + 1] !== null);
+    } else {
+      setQuizCompleted(true);
+      toast({
+        title: "Quiz completed!",
+        description: `You scored ${score} out of ${questions.length} questions.`,
+      });
+    }
+  };
+
+  const handlePreviousQuestion = () => {
+    if (currentQuestion > 0) {
+      setCurrentQuestion(prev => prev - 1);
+      setSelectedAnswer(answers[currentQuestion - 1]);
+      setShowAnswer(answers[currentQuestion - 1] !== null);
+    }
+  };
+
+  const handleRestartQuiz = () => {
+    setCurrentQuestion(0);
+    setSelectedAnswer(null);
+    setShowAnswer(false);
     setScore(0);
-    setAnswers([]);
+    setAnswers(new Array(questions.length).fill(null));
+    setQuizCompleted(false);
+  };
+
+  const getScorePercentage = () => {
+    return Math.round((score / questions.length) * 100);
+  };
+
+  const getScoreColor = () => {
+    const percentage = getScorePercentage();
+    if (percentage >= 80) return 'text-green-600';
+    if (percentage >= 60) return 'text-yellow-600';
+    return 'text-red-600';
+  };
+
+  const getDifficultyColor = (difficulty?: string) => {
+    switch (difficulty) {
+      case 'easy': return 'bg-green-100 text-green-800';
+      case 'medium': return 'bg-yellow-100 text-yellow-800';
+      case 'hard': return 'bg-red-100 text-red-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
   };
 
   if (questions.length === 0) {
     return (
       <Card>
         <CardContent className="text-center py-8">
-          <Play className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+          <Brain className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
           <h3 className="text-lg font-semibold mb-2 lowercase">no quiz available</h3>
           <p className="text-muted-foreground lowercase">
-            quiz questions are being generated for this document
+            quiz questions will appear here once they're generated from your document
           </p>
         </CardContent>
       </Card>
     );
   }
 
-  if (quizComplete) {
-    const percentage = Math.round((score / questions.length) * 100);
+  if (quizCompleted) {
     return (
       <Card>
-        <CardHeader>
-          <CardTitle className="text-center lowercase">quiz complete!</CardTitle>
-          <CardDescription className="text-center lowercase">
-            you scored {score} out of {questions.length} questions
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="text-center">
-            <div className="text-3xl font-bold mb-2">{percentage}%</div>
-            <Progress value={percentage} className="w-full" />
+        <CardContent className="text-center py-8">
+          <Trophy className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
+          <h3 className="text-2xl font-bold mb-2 lowercase">quiz completed!</h3>
+          <div className={`text-3xl font-bold mb-4 ${getScoreColor()}`}>
+            {score}/{questions.length} ({getScorePercentage()}%)
           </div>
-
-          <div className="space-y-2">
-            <h4 className="font-semibold lowercase">results breakdown:</h4>
-            {answers.map((answer, index) => (
-              <div key={answer.questionId} className="flex items-center justify-between p-2 rounded bg-muted/50">
-                <span className="text-sm">question {index + 1}</span>
-                <div className="flex items-center gap-2">
-                  {answer.correct ? (
-                    <CheckCircle className="w-4 h-4 text-green-500" />
-                  ) : (
-                    <XCircle className="w-4 h-4 text-red-500" />
-                  )}
-                  <Badge variant={answer.correct ? "default" : "destructive"}>
-                    {answer.correct ? 'correct' : 'incorrect'}
-                  </Badge>
-                </div>
-              </div>
-            ))}
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-md mx-auto mb-6">
+            <div className="text-center">
+              <div className="text-2xl font-bold text-green-600">{score}</div>
+              <div className="text-sm text-muted-foreground lowercase">correct</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-red-600">{questions.length - score}</div>
+              <div className="text-sm text-muted-foreground lowercase">incorrect</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-blue-600">{getScorePercentage()}%</div>
+              <div className="text-sm text-muted-foreground lowercase">score</div>
+            </div>
           </div>
 
           <div className="flex gap-4 justify-center">
-            <Button onClick={handleRestart} variant="outline" className="lowercase">
+            <Button onClick={handleRestartQuiz} variant="outline" className="lowercase">
               <RotateCcw className="w-4 h-4 mr-2" />
-              try again
+              retake quiz
+            </Button>
+            <Button onClick={() => setCurrentQuestion(0)} className="lowercase">
+              <Brain className="w-4 h-4 mr-2" />
+              review answers
             </Button>
           </div>
         </CardContent>
@@ -189,86 +173,110 @@ export function QuizPlayer({ questions, documentId, onComplete }: QuizPlayerProp
     );
   }
 
+  const question = questions[currentQuestion];
+  const isAnswered = answers[currentQuestion] !== null;
+  const currentAnswer = answers[currentQuestion];
+
   return (
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle className="lowercase">question {currentQuestionIndex + 1} of {questions.length}</CardTitle>
-          <Badge variant="outline">{Math.round(((currentQuestionIndex + 1) / questions.length) * 100)}%</Badge>
+          <div className="space-y-2">
+            <CardTitle className="text-lg lowercase">
+              question {currentQuestion + 1} of {questions.length}
+            </CardTitle>
+            {question.difficulty && (
+              <Badge className={getDifficultyColor(question.difficulty)}>
+                {question.difficulty}
+              </Badge>
+            )}
+          </div>
+          <div className="text-sm text-muted-foreground">
+            Score: {score}/{questions.length}
+          </div>
         </div>
-        <Progress value={((currentQuestionIndex + 1) / questions.length) * 100} className="w-full" />
+        <Progress value={(currentQuestion / questions.length) * 100} className="w-full" />
       </CardHeader>
+
       <CardContent className="space-y-6">
         <div>
-          <h3 className="text-lg font-semibold mb-4">{currentQuestion.question}</h3>
+          <h3 className="text-xl font-semibold mb-4">{question.question}</h3>
           
-          {currentQuestion.type === 'mcq' && (
-            <div className="space-y-3">
-              {shuffledOptions.map((option, index) => (
-                <div
+          <div className="space-y-3">
+            {question.options.map((option, index) => {
+              const isSelected = selectedAnswer === index;
+              const isCorrect = index === question.correct_answer;
+              const wasSelected = currentAnswer === index;
+              
+              let buttonVariant: "default" | "outline" | "secondary" = "outline";
+              let buttonClass = "";
+              
+              if (showAnswer) {
+                if (isCorrect) {
+                  buttonClass = "border-green-500 bg-green-50 text-green-700";
+                } else if (wasSelected && !isCorrect) {
+                  buttonClass = "border-red-500 bg-red-50 text-red-700";
+                }
+              } else if (isSelected) {
+                buttonVariant = "default";
+              }
+
+              return (
+                <Button
                   key={index}
-                  className={`p-4 border rounded-lg cursor-pointer transition-colors ${
-                    selectedAnswer === option 
-                      ? 'border-primary bg-primary/5' 
-                      : 'border-border hover:border-primary/50'
-                  }`}
-                  onClick={() => !showResult && setSelectedAnswer(option)}
+                  variant={buttonVariant}
+                  className={`w-full text-left justify-start h-auto p-4 ${buttonClass}`}
+                  onClick={() => handleAnswerSelect(index)}
+                  disabled={showAnswer}
                 >
                   <div className="flex items-center gap-3">
-                    <div className={`w-4 h-4 rounded-full border-2 ${
-                      selectedAnswer === option 
-                        ? 'border-primary bg-primary' 
-                        : 'border-muted-foreground'
-                    }`} />
-                    <span>{option}</span>
+                    <div className="w-6 h-6 rounded-full border-2 border-current flex items-center justify-center text-xs font-bold">
+                      {String.fromCharCode(65 + index)}
+                    </div>
+                    <span className="flex-1">{option}</span>
+                    {showAnswer && isCorrect && (
+                      <CheckCircle className="w-5 h-5 text-green-600" />
+                    )}
+                    {showAnswer && wasSelected && !isCorrect && (
+                      <XCircle className="w-5 h-5 text-red-600" />
+                    )}
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
+                </Button>
+              );
+            })}
+          </div>
         </div>
 
-        {showResult && (
-          <div className={`p-4 rounded-lg ${
-            answers[answers.length - 1]?.correct 
-              ? 'bg-green-50 border border-green-200' 
-              : 'bg-red-50 border border-red-200'
-          }`}>
-            <div className="flex items-center gap-2 mb-2">
-              {answers[answers.length - 1]?.correct ? (
-                <CheckCircle className="w-5 h-5 text-green-600" />
-              ) : (
-                <XCircle className="w-5 h-5 text-red-600" />
-              )}
-              <span className="font-semibold">
-                {answers[answers.length - 1]?.correct ? 'Correct!' : 'Incorrect'}
-              </span>
-            </div>
-            <p className="text-sm">{currentQuestion.evidence_anchor}</p>
-            {!answers[answers.length - 1]?.correct && (
-              <p className="text-sm mt-2">
-                <strong>correct answer:</strong> {currentQuestion.correct_answer}
-              </p>
-            )}
+        {showAnswer && question.explanation && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <h4 className="font-semibold text-blue-900 mb-2 lowercase">explanation</h4>
+            <p className="text-blue-800">{question.explanation}</p>
           </div>
         )}
 
-        <div className="flex justify-between">
-          <div className="text-sm text-muted-foreground">
-            score: {score}/{questions.length}
-          </div>
+        <div className="flex items-center justify-between pt-4 border-t">
+          <Button
+            onClick={handlePreviousQuestion}
+            variant="outline"
+            disabled={currentQuestion === 0}
+            className="lowercase"
+          >
+            previous
+          </Button>
+
           <div className="flex gap-2">
-            {!showResult ? (
-              <Button 
-                onClick={handleAnswerSubmit} 
-                disabled={!selectedAnswer.trim() || isSubmitting}
+            {!showAnswer ? (
+              <Button
+                onClick={handleSubmitAnswer}
+                disabled={selectedAnswer === null}
                 className="lowercase"
               >
-                {isSubmitting ? 'submitting...' : 'submit answer'}
+                submit answer
               </Button>
             ) : (
-              <Button onClick={handleNext} className="lowercase">
-                {currentQuestionIndex < questions.length - 1 ? 'next question' : 'finish quiz'}
+              <Button onClick={handleNextQuestion} className="lowercase">
+                {currentQuestion === questions.length - 1 ? 'finish quiz' : 'next question'}
+                <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
             )}
           </div>

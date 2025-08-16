@@ -18,6 +18,22 @@ type Mindmap = Database['public']['Tables']['mindmaps']['Row'];
 type Unlockable = Database['public']['Tables']['unlockables']['Row'];
 type UserUnlockable = Database['public']['Tables']['user_unlockables']['Row'];
 
+// Configure multer for file uploads
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ['application/pdf', 'text/plain', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only PDF, TXT, and DOCX files are allowed.'));
+    }
+  }
+});
+
 export async function registerRoutes(app: Express): Promise<Server> {
   const documentProcessor = new DocumentProcessor();
   // Middleware to extract user from Supabase auth header
@@ -623,23 +639,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Setup multer for file uploads
-  const upload = multer({ 
-    storage: multer.memoryStorage(),
-    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
-    fileFilter: (req, file, cb) => {
-      const allowedTypes = [
-        'application/pdf',
-        'text/plain',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-      ];
-      
-      if (allowedTypes.includes(file.mimetype)) {
-        cb(null, true);
-      } else {
-        cb(new Error('Invalid file type. Only PDF, TXT, and DOCX files are allowed.'));
-      }
-    }
-  });
+
 
   // MVP Document upload and processing routes
   app.post('/api/documents/upload', requireAuth, upload.single('file'), async (req: AuthenticatedRequest, res: Response) => {
