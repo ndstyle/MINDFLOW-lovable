@@ -408,12 +408,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // AI routes (OpenAI integration)
   app.post('/api/generate-mindmap', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+    const requestId = req.body.requestId || Date.now();
+    console.log(`[${requestId}] BACKEND: Received generate-mindmap request`);
+    console.log(`[${requestId}] BACKEND: User ID:`, req.user?.id);
+    console.log(`[${requestId}] BACKEND: Request body:`, req.body);
+    
     try {
       const { text, category } = req.body;
 
+      console.log(`[${requestId}] BACKEND: Text length:`, text?.length);
+      console.log(`[${requestId}] BACKEND: Category:`, category);
+
+      if (!text) {
+        console.error(`[${requestId}] BACKEND: No text provided in request`);
+        return res.status(400).json({ error: 'Text is required' });
+      }
+
+      console.log(`[${requestId}] BACKEND: Checking OpenAI API key...`);
       if (!process.env.OPENAI_API_KEY) {
+        console.error(`[${requestId}] BACKEND: OpenAI API key not configured`);
         return res.status(500).json({ error: 'OpenAI API key not configured' });
       }
+      console.log(`[${requestId}] BACKEND: OpenAI API key is available (length: ${process.env.OPENAI_API_KEY.length})`);
+
+      // Verify user profile exists
+      if (!req.profile) {
+        console.error(`[${requestId}] BACKEND: No user profile found`);
+        return res.status(400).json({ error: 'User profile not found' });
+      }
+      console.log(`[${requestId}] BACKEND: User profile verified:`, req.profile.id);
 
       // New improved prompt for reference design matching
       const prompt = `
@@ -471,6 +494,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         Content: ${text}
       `;
 
+      console.log(`[${requestId}] BACKEND: Making OpenAI API request...`);
+      const openaiStartTime = Date.now();
+      
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -494,17 +520,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }),
       });
 
+      const openaiDuration = Date.now() - openaiStartTime;
+      console.log(`[${requestId}] BACKEND: OpenAI request completed in ${openaiDuration}ms`);
+      console.log(`[${requestId}] BACKEND: OpenAI response status:`, response.status);
+
       if (!response.ok) {
-        throw new Error(`OpenAI API error: ${response.status}`);
+        const errorText = await response.text();
+        console.error(`[${requestId}] BACKEND: OpenAI API error:`, response.status, errorText);
+        throw new Error(`OpenAI API error: ${response.status} - ${errorText}`);
       }
 
+      console.log(`[${requestId}] BACKEND: Parsing OpenAI response...`);
       const aiResponse = await response.json();
+      console.log(`[${requestId}] BACKEND: OpenAI usage:`, aiResponse.usage);
+      
       const content = aiResponse.choices[0]?.message?.content;
+      console.log(`[${requestId}] BACKEND: Generated content length:`, content?.length);
 
       if (!content) {
+        console.error(`[${requestId}] BACKEND: No content generated from OpenAI`);
         throw new Error('No content generated');
       }
 
+      console.log(`[${requestId}] BACKEND: Cleaning up OpenAI response...`);
       // Clean up the response if it contains markdown code blocks
       let cleanContent = content;
       if (cleanContent.includes('```json')) {
@@ -514,33 +552,81 @@ export async function registerRoutes(app: Express): Promise<Server> {
         cleanContent = cleanContent.replace(/```/g, '');
       }
 
-      let mindmapData = JSON.parse(cleanContent);
+      console.log(`[${requestId}] BACKEND: Parsing JSON content...`);
+      let mindmapData;
+      try {
+        mindmapData = JSON.parse(cleanContent);
+        console.log(`[${requestId}] BACKEND: Successfully parsed JSON, nodes count:`, mindmapData.nodes?.length);
+      } catch (parseError) {
+        console.error(`[${requestId}] BACKEND: JSON parse error:`, parseError);
+        console.error(`[${requestId}] BACKEND: Content that failed to parse:`, cleanContent);
+        throw new Error(`Failed to parse OpenAI response: ${parseError.message}`);
+      }
       
       // Ensure proper positioning and colors
+      console.log(`[${requestId}] BACKEND: Ensuring proper node positioning...`);
       mindmapData.nodes = ensureProperPositioning(mindmapData.nodes);
+      console.log(`[${requestId}] BACKEND: Node positioning completed`);
       
       // Save the generated mindmap to the database
+      console.log(`[${requestId}] BACKEND: Saving mindmap to database...`);
+      const dbStartTime = Date.now();
+      
+      const mindmapToSave = {
+        owner_id: req.user!.id,
+        title: mindmapData.title || text.substring(0, 50) + (text.length > 50 ? '...' : ''),
+        intent: category || 'general',
+        content: mindmapData,
+      };
+      
+      console.log(`[${requestId}] BACKEND: Mindmap data to save:`, {
+        owner_id: mindmapToSave.owner_id,
+        title: mindmapToSave.title,
+        intent: mindmapToSave.intent,
+        contentKeys: Object.keys(mindmapToSave.content)
+      });
+
       const { data: savedMindmap, error: saveError } = await supabase
         .from('mindmaps')
-        .insert({
-          owner_id: req.user!.id,
-          title: mindmapData.title || text.substring(0, 50) + (text.length > 50 ? '...' : ''),
-          intent: category || 'general',
-          content: mindmapData,
-        })
+        .insert(mindmapToSave)
         .select()
         .single();
 
+      const dbDuration = Date.now() - dbStartTime;
+      console.log(`[${requestId}] BACKEND: Database save completed in ${dbDuration}ms`);
+
       if (saveError) {
-        console.error('Error saving mindmap:', saveError);
-        return res.status(500).json({ error: 'Failed to save mindmap to database' });
+        console.error(`[${requestId}] BACKEND: Database save error:`, saveError);
+        return res.status(500).json({ error: `Failed to save mindmap to database: ${saveError.message}` });
       }
 
+      console.log(`[${requestId}] BACKEND: Mindmap saved successfully with ID:`, savedMindmap.id);
+
       // Return the saved mindmap with database ID
+      console.log(`[${requestId}] BACKEND: Sending successful response`);
       res.json(savedMindmap);
-    } catch (error) {
-      console.error('Generate mindmap error:', error);
-      res.status(500).json({ error: 'Failed to generate mindmap' });
+    } catch (error: any) {
+      console.error(`[${requestId}] BACKEND: Error in mindmap generation:`, error);
+      console.error(`[${requestId}] BACKEND: Error name:`, error.name);
+      console.error(`[${requestId}] BACKEND: Error message:`, error.message);
+      console.error(`[${requestId}] BACKEND: Error stack:`, error.stack);
+      
+      let errorMessage = 'Failed to generate mindmap';
+      let statusCode = 500;
+      
+      if (error.message.includes('OpenAI API error')) {
+        errorMessage = `OpenAI service error: ${error.message}`;
+        statusCode = 502;
+      } else if (error.message.includes('JSON parse')) {
+        errorMessage = `Response parsing error: ${error.message}`;
+        statusCode = 502;
+      } else if (error.message.includes('database')) {
+        errorMessage = `Database error: ${error.message}`;
+        statusCode = 500;
+      }
+      
+      console.log(`[${requestId}] BACKEND: Sending error response: ${statusCode} - ${errorMessage}`);
+      res.status(statusCode).json({ error: errorMessage });
     }
   });
 

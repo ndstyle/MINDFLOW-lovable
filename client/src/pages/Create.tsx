@@ -165,7 +165,12 @@ export default function Create() {
   };
 
   const handleGenerate = async () => {
+    const requestId = Date.now();
+    console.log(`[${requestId}] FRONTEND: Starting mind map generation process`);
+    console.log(`[${requestId}] FRONTEND: Input text length:`, text.trim().length);
+
     if (!text.trim()) {
+      console.log(`[${requestId}] FRONTEND: Validation failed - no text input`);
       toast({
         title: "Input required",
         description: "Please enter some text, upload a file, or use voice input to generate a mind map.",
@@ -175,13 +180,43 @@ export default function Create() {
     }
 
     setIsGenerating(true);
+    console.log(`[${requestId}] FRONTEND: Set loading state to true`);
 
     try {
       // Get auth session for authenticated requests
+      console.log(`[${requestId}] FRONTEND: Getting Supabase auth session...`);
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !session) {
-        throw new Error('Authentication required');
+      
+      if (sessionError) {
+        console.error(`[${requestId}] FRONTEND: Session error:`, sessionError);
+        throw new Error(`Authentication error: ${sessionError.message}`);
       }
+      
+      if (!session) {
+        console.error(`[${requestId}] FRONTEND: No session found`);
+        throw new Error('No authentication session found');
+      }
+
+      console.log(`[${requestId}] FRONTEND: Auth session valid, user ID:`, session.user?.id);
+      console.log(`[${requestId}] FRONTEND: Token length:`, session.access_token?.length);
+
+      const requestPayload = {
+        text: text.trim(),
+        category: 'general',
+        requestId: requestId // Add request ID for tracking
+      };
+
+      console.log(`[${requestId}] FRONTEND: Making API request to /api/generate-mindmap`);
+      console.log(`[${requestId}] FRONTEND: Request payload:`, requestPayload);
+
+      const requestStartTime = Date.now();
+      
+      // Add timeout to the fetch request
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        console.error(`[${requestId}] FRONTEND: Request timeout after 30 seconds`);
+        controller.abort();
+      }, 30000);
 
       const response = await fetch('/api/generate-mindmap', {
         method: 'POST',
@@ -189,20 +224,29 @@ export default function Create() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`
         },
-        body: JSON.stringify({
-          text: text.trim(),
-          category: 'general' // Default category since we removed selection
-        }),
+        body: JSON.stringify(requestPayload),
+        signal: controller.signal
       });
 
+      clearTimeout(timeoutId);
+      const requestDuration = Date.now() - requestStartTime;
+      console.log(`[${requestId}] FRONTEND: Request completed in ${requestDuration}ms`);
+      console.log(`[${requestId}] FRONTEND: Response status:`, response.status);
+      console.log(`[${requestId}] FRONTEND: Response ok:`, response.ok);
+
       if (!response.ok) {
-        throw new Error('Failed to generate mind map');
+        const errorText = await response.text();
+        console.error(`[${requestId}] FRONTEND: API error response:`, errorText);
+        throw new Error(`API Error ${response.status}: ${errorText}`);
       }
 
+      console.log(`[${requestId}] FRONTEND: Parsing response JSON...`);
       const savedMindmap = await response.json();
-      console.log('Generated and saved mindmap:', savedMindmap);
+      console.log(`[${requestId}] FRONTEND: Generated and saved mindmap:`, savedMindmap);
+      console.log(`[${requestId}] FRONTEND: Mindmap ID:`, savedMindmap.id);
 
       // Navigate to view page using the database ID
+      console.log(`[${requestId}] FRONTEND: Navigating to /mindmap/${savedMindmap.id}`);
       setLocation(`/mindmap/${savedMindmap.id}`);
 
       toast({
@@ -210,14 +254,33 @@ export default function Create() {
         description: "Your mind map has been generated successfully."
       });
 
-    } catch (error) {
-      console.error('Error generating mind map:', error);
+      console.log(`[${requestId}] FRONTEND: Success! Process completed`);
+
+    } catch (error: any) {
+      console.error(`[${requestId}] FRONTEND: Error in mind map generation:`, error);
+      console.error(`[${requestId}] FRONTEND: Error name:`, error.name);
+      console.error(`[${requestId}] FRONTEND: Error message:`, error.message);
+      console.error(`[${requestId}] FRONTEND: Error stack:`, error.stack);
+
+      let errorMessage = "Failed to generate mind map. Please try again.";
+      
+      if (error.name === 'AbortError') {
+        errorMessage = "Request timed out. Please check your connection and try again.";
+      } else if (error.message.includes('Authentication')) {
+        errorMessage = "Authentication failed. Please sign in again.";
+        setLocation('/auth');
+        return;
+      } else if (error.message.includes('API Error')) {
+        errorMessage = error.message;
+      }
+
       toast({
         title: "Generation failed",
-        description: "Failed to generate mind map. Please try again.",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
+      console.log(`[${requestId}] FRONTEND: Setting loading state to false`);
       setIsGenerating(false);
     }
   };
