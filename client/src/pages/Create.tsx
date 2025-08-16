@@ -9,6 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useDropzone } from 'react-dropzone';
 import { default as Header } from '@/components/Header';
 import { VoiceInput } from '@/components/VoiceInput';
+import { supabase } from '@/lib/supabase';
 
 interface UploadedFile {
   file: File;
@@ -176,10 +177,17 @@ export default function Create() {
     setIsGenerating(true);
 
     try {
+      // Get auth session for authenticated requests
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session) {
+        throw new Error('Authentication required');
+      }
+
       const response = await fetch('/api/generate-mindmap', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
         },
         body: JSON.stringify({
           text: text.trim(),
@@ -191,21 +199,11 @@ export default function Create() {
         throw new Error('Failed to generate mind map');
       }
 
-      const mindmapData = await response.json();
-      console.log('Generated mindmap data:', mindmapData);
+      const savedMindmap = await response.json();
+      console.log('Generated and saved mindmap:', savedMindmap);
 
-      // Store the mindmap data in sessionStorage for the view page
-      const mindmapForView = {
-        title: mindmapData.title || text.substring(0, 50) + (text.length > 50 ? '...' : ''),
-        content: mindmapData,
-        intent: 'general',
-        created_at: new Date().toISOString()
-      };
-      
-      sessionStorage.setItem('currentMindmap', JSON.stringify(mindmapForView));
-
-      // Navigate to view page
-      setLocation('/view');
+      // Navigate to view page using the database ID
+      setLocation(`/mindmap/${savedMindmap.id}`);
 
       toast({
         title: "Mind map created!",

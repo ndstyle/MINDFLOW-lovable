@@ -407,7 +407,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // AI routes (OpenAI integration)
-  app.post('/api/generate-mindmap', async (req, res) => {
+  app.post('/api/generate-mindmap', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { text, category } = req.body;
 
@@ -519,7 +519,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Ensure proper positioning and colors
       mindmapData.nodes = ensureProperPositioning(mindmapData.nodes);
       
-      res.json(mindmapData);
+      // Save the generated mindmap to the database
+      const { data: savedMindmap, error: saveError } = await supabase
+        .from('mindmaps')
+        .insert({
+          owner_id: req.user!.id,
+          title: mindmapData.title || text.substring(0, 50) + (text.length > 50 ? '...' : ''),
+          intent: category || 'general',
+          content: mindmapData,
+        })
+        .select()
+        .single();
+
+      if (saveError) {
+        console.error('Error saving mindmap:', saveError);
+        return res.status(500).json({ error: 'Failed to save mindmap to database' });
+      }
+
+      // Return the saved mindmap with database ID
+      res.json(savedMindmap);
     } catch (error) {
       console.error('Generate mindmap error:', error);
       res.status(500).json({ error: 'Failed to generate mindmap' });
