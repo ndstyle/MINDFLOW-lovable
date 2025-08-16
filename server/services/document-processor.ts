@@ -164,12 +164,6 @@ export class DocumentProcessor {
 }
 
 export const documentProcessor = new DocumentProcessor();
-
-  private async generateEmbeddings(chunks: Chunk[]) {
-    for (const chunk of chunks) {
-      try {
-        const embeddingResponse = await openai.embeddings.create({
-          model: 'text-embedding-3-small',
           input: chunk.content,
           dimensions: 1536
         });

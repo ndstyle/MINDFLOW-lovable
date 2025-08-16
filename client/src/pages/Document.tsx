@@ -239,11 +239,6 @@ export default function DocumentView() {
     </div>
   );
 }
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json'
-        }
-      });
 
       if (!response.ok) throw new Error('Failed to generate questions');
       return response.json();

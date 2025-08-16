@@ -208,7 +208,7 @@ export function DocumentUpload() {
     setUploadedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+  const { getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: {
       'application/pdf': ['.pdf'],
@@ -216,7 +216,8 @@ export function DocumentUpload() {
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx']
     },
     maxSize: 10 * 1024 * 1024, // 10MB
-    multiple: true
+    multiple: true,
+    noClick: true // Disable click on container
   });
 
   return (
@@ -231,14 +232,29 @@ export function DocumentUpload() {
       <Card className="mb-6">
         <CardContent className="p-6">
           <div
-            {...getRootProps()}
-            className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
+            className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
               isDragActive 
                 ? 'border-primary bg-primary/5' 
-                : 'border-muted-foreground/25 hover:border-primary/50'
+                : 'border-muted-foreground/25'
             }`}
+            onDrop={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (isDragActive) {
+                const files = Array.from(e.dataTransfer.files);
+                onDrop(files);
+              }
+            }}
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+            onDragEnter={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
           >
-            <input {...getInputProps()} />
+            <input {...getInputProps()} style={{ display: 'none' }} id="file-upload" />
             <Upload className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
             
             {isDragActive ? (
@@ -254,7 +270,15 @@ export function DocumentUpload() {
                 <p className="text-sm text-muted-foreground mb-4 lowercase">
                   or click to browse your files
                 </p>
-                <Button variant="outline" className="lowercase">
+                <Button 
+                  variant="outline" 
+                  className="lowercase"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    const input = document.getElementById('file-upload') as HTMLInputElement;
+                    input?.click();
+                  }}
+                >
                   choose files
                 </Button>
               </div>
