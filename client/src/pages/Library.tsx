@@ -1,149 +1,103 @@
-import { useState, useEffect } from 'react';
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { FileText, Upload, Eye, Trash2, Share, Download } from 'lucide-react';
-import { toast } from 'sonner';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase';
-import type { Document } from '../../../shared/schema';
-import { useLocation } from 'wouter';
 
-interface DocumentWithMetadata extends Document {
-  node_count?: number;
+import { useState, useEffect } from 'react';
+import { useLocation } from 'wouter';
+import { useAuth } from '@/hooks/useAuth';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { FileText, Upload, Brain, Calendar, ArrowRight, Plus } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { default as Header } from '@/components/Header';
+import { supabase } from '@/lib/supabase';
+
+interface Document {
+  id: string;
+  title: string;
+  type: string;
+  status: 'processing' | 'completed' | 'failed';
+  created_at: string;
+  updated_at: string;
 }
 
 export default function Library() {
+  const { user, loading } = useAuth();
   const [, setLocation] = useLocation();
-  const queryClient = useQueryClient();
+  const [documents, setDocuments] = useState<Document[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
 
-  // Fetch user's documents
-  const { data: documents, isLoading } = useQuery({
-    queryKey: ['/api/documents'],
-    queryFn: async () => {
-      const { data: { session }, error } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
+  useEffect(() => {
+    if (!loading && !user) {
+      console.log('Library: No user, redirecting to auth');
+      setLocation('/auth');
+    }
+  }, [user, loading, setLocation]);
+
+  useEffect(() => {
+    if (user) {
+      fetchDocuments();
+    }
+  }, [user]);
+
+  const fetchDocuments = async () => {
+    try {
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session) {
+        console.error('Session error:', sessionError);
+        return;
+      }
 
       const response = await fetch('/api/documents', {
         headers: {
           'Authorization': `Bearer ${session.access_token}`
         }
       });
-      
-      if (!response.ok) throw new Error('Failed to fetch documents');
-      const result = await response.json();
-      return result.documents as DocumentWithMetadata[];
-    }
-  });
 
-  const deleteMutation = useMutation({
-    mutationFn: async (documentId: string) => {
-      const { data: { session }, error } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
-
-      const response = await fetch(`/api/documents/${documentId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`
-        }
-      });
-
-      if (!response.ok) throw new Error('Failed to delete document');
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/documents'] });
-      toast.success('Document deleted successfully');
-    },
-    onError: () => {
-      toast.error('Failed to delete document');
-    }
-  });
-
-  const shareMutation = useMutation({
-    mutationFn: async (documentId: string) => {
-      const { data: { session }, error } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
-
-      const response = await fetch(`/api/share/${documentId}`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) throw new Error('Failed to create share link');
-      return response.json();
-    },
-    onSuccess: (data) => {
-      navigator.clipboard.writeText(data.shareUrl);
-      toast.success('Share link copied to clipboard!');
-    },
-    onError: () => {
-      toast.error('Failed to create share link');
-    }
-  });
-
-  const exportMutation = useMutation({
-    mutationFn: async ({ documentId, format }: { documentId: string; format: string }) => {
-      const { data: { session }, error } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
-
-      const response = await fetch(`/api/export/${documentId}`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ format })
-      });
-
-      if (!response.ok) throw new Error('Failed to export document');
-      
-      if (format === 'markdown') {
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'mindmap.md';
-        a.click();
-        URL.revokeObjectURL(url);
+      if (!response.ok) {
+        throw new Error('Failed to fetch documents');
       }
-    },
-    onSuccess: () => {
-      toast.success('Document exported successfully!');
-    },
-    onError: () => {
-      toast.error('Failed to export document');
-    }
-  });
 
-  const getStatusColor = (status: string) => {
+      const data = await response.json();
+      setDocuments(data.documents || []);
+    } catch (error) {
+      console.error('Error fetching documents:', error);
+      toast({
+        title: "Failed to load documents",
+        description: "Please try refreshing the page.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const getStatusColor = (status: Document['status']) => {
     switch (status) {
-      case 'completed': return 'bg-green-500';
-      case 'processing': return 'bg-yellow-500';
-      case 'failed': return 'bg-red-500';
-      default: return 'bg-gray-500';
+      case 'completed':
+        return 'default';
+      case 'processing':
+        return 'secondary';
+      case 'failed':
+        return 'destructive';
+      default:
+        return 'secondary';
     }
   };
 
-  const getTypeIcon = (type: string) => {
-    return <FileText className="w-4 h-4" />;
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
   };
 
-  if (isLoading) {
+  if (loading) {
     return (
-      <div className="min-h-screen bg-background">
-        <div className="container mx-auto px-6 py-8">
-          <div className="max-w-6xl mx-auto">
-            <div className="space-y-4">
-              <h1 className="text-3xl font-bold lowercase">your library</h1>
-              <div className="text-center py-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-                <p className="text-muted-foreground mt-4">loading your documents...</p>
-              </div>
-            </div>
-          </div>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading...</p>
         </div>
       </div>
     );
@@ -151,118 +105,120 @@ export default function Library() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-6 py-8">
-        <div className="max-w-6xl mx-auto space-y-8">
+      <Header />
+
+      <main className="container mx-auto px-4 py-8">
+        <div className="max-w-6xl mx-auto">
           {/* Header */}
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between mb-8">
             <div>
-              <h1 className="text-3xl font-bold lowercase">your library</h1>
-              <p className="text-muted-foreground lowercase">
-                manage your uploaded documents and mind maps
+              <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent mb-2">
+                Document Library
+              </h1>
+              <p className="text-xl text-muted-foreground">
+                Access your uploaded documents and generate quizzes
               </p>
             </div>
-            <Button 
+            <Button
               onClick={() => setLocation('/upload')}
-              className="lowercase"
+              className="bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
             >
-              <Upload className="w-4 h-4 mr-2" />
-              upload document
+              <Plus className="w-4 h-4 mr-2" />
+              Upload Document
             </Button>
           </div>
 
           {/* Documents Grid */}
-          {documents && documents.length > 0 ? (
+          {isLoading ? (
+            <div className="text-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+              <p className="text-muted-foreground">Loading documents...</p>
+            </div>
+          ) : documents.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="w-24 h-24 bg-muted rounded-full flex items-center justify-center mx-auto mb-6">
+                <FileText className="w-12 h-12 text-muted-foreground" />
+              </div>
+              <h3 className="text-xl font-semibold mb-2">No documents yet</h3>
+              <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+                Upload your first document to start generating quizzes and mind maps from your content.
+              </p>
+              <div className="flex gap-4 justify-center">
+                <Button
+                  onClick={() => setLocation('/upload')}
+                  className="bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  Upload Document
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setLocation('/create')}
+                >
+                  Create Mind Map
+                </Button>
+              </div>
+            </div>
+          ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {documents.map((doc) => (
-                <Card key={doc.id} className="hover:shadow-lg transition-shadow">
-                  <CardHeader className="pb-4">
+                <Card key={doc.id} className="hover:shadow-lg transition-shadow cursor-pointer group">
+                  <CardHeader>
                     <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-2">
-                        {getTypeIcon(doc.type)}
-                        <CardTitle className="text-lg lowercase truncate">
+                      <div className="flex-1 min-w-0">
+                        <CardTitle className="text-lg truncate mb-2">
                           {doc.title}
                         </CardTitle>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-xs">
+                            {doc.type.toUpperCase()}
+                          </Badge>
+                          <Badge variant={getStatusColor(doc.status)} className="text-xs">
+                            {doc.status}
+                          </Badge>
+                        </div>
                       </div>
-                      <Badge 
-                        variant="secondary" 
-                        className={`${getStatusColor(doc.status)} text-white lowercase`}
-                      >
-                        {doc.status}
-                      </Badge>
+                      <FileText className="w-6 h-6 text-muted-foreground flex-shrink-0" />
                     </div>
-                    <CardDescription className="lowercase">
-                      {doc.type.toUpperCase()} • {new Date(doc.created_at).toLocaleDateString()}
-                    </CardDescription>
                   </CardHeader>
                   
-                  <CardContent className="pt-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setLocation(`/document/${doc.id}`)}
-                          disabled={doc.status !== 'completed'}
-                          className="lowercase"
-                        >
-                          <Eye className="w-4 h-4 mr-1" />
-                          view
-                        </Button>
-                        
-                        {doc.status === 'completed' && (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => shareMutation.mutate(doc.id)}
-                              disabled={shareMutation.isPending}
-                              className="lowercase"
-                            >
-                              <Share className="w-4 h-4" />
-                            </Button>
-                            
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => exportMutation.mutate({ documentId: doc.id, format: 'markdown' })}
-                              disabled={exportMutation.isPending}
-                              className="lowercase"
-                            >
-                              <Download className="w-4 h-4" />
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                      
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => deleteMutation.mutate(doc.id)}
-                        disabled={deleteMutation.isPending}
-                        className="lowercase"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                  <CardContent className="space-y-4">
+                    <div className="flex items-center text-sm text-muted-foreground">
+                      <Calendar className="w-4 h-4 mr-2" />
+                      {formatDate(doc.created_at)}
                     </div>
+
+                    {doc.status === 'completed' && (
+                      <Button
+                        onClick={() => setLocation(`/document/${doc.id}`)}
+                        className="w-full group-hover:bg-primary group-hover:text-primary-foreground transition-colors"
+                        variant="outline"
+                      >
+                        <Brain className="w-4 h-4 mr-2" />
+                        View & Create Quiz
+                        <ArrowRight className="w-4 h-4 ml-2" />
+                      </Button>
+                    )}
+
+                    {doc.status === 'processing' && (
+                      <div className="flex items-center justify-center py-2 text-sm text-muted-foreground">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mr-2"></div>
+                        Processing...
+                      </div>
+                    )}
+
+                    {doc.status === 'failed' && (
+                      <div className="text-center py-2 text-sm text-destructive">
+                        Processing failed
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               ))}
             </div>
-          ) : (
-            <div className="text-center py-12">
-              <FileText className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-xl font-semibold mb-2 lowercase">no documents yet</h3>
-              <p className="text-muted-foreground mb-6 lowercase">
-                upload your first document to create a mind map
-              </p>
-              <Button onClick={() => setLocation('/upload')} className="lowercase">
-                <Upload className="w-4 h-4 mr-2" />
-                upload document
-              </Button>
-            </div>
           )}
         </div>
-      </div>
+      </main>
     </div>
   );
 }

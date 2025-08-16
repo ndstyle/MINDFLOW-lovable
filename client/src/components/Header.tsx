@@ -44,6 +44,20 @@ const Header = () => {
               <Link href="/history" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors lowercase">
                 history
               </Link>
+              <Button 
+                variant="ghost" 
+                asChild
+                className="text-sm font-medium hover:text-primary transition-colors"
+              >
+                <Link href="/history">History</Link>
+              </Button>
+              <Button 
+                variant="ghost" 
+                asChild
+                className="text-sm font-medium hover:text-primary transition-colors"
+              >
+                <Link href="/library">Library</Link>
+              </Button>
             </>
           )}
         </nav>
@@ -65,11 +79,12 @@ const Header = () => {
           )}
           {user ? (
             <>
-              <Link href="/create">
-                <Button size="sm" className="lowercase">
-                  create
-                </Button>
-              </Link>
+              <Button asChild variant="outline" className="mr-2">
+                <Link href="/upload">Upload Document</Link>
+              </Button>
+              <Button asChild className="bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70">
+                <Link href="/create">Create Mind Map</Link>
+              </Button>
               <Button
                 size="sm"
                 variant="ghost"
