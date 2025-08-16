@@ -52,7 +52,7 @@ export default function Create() {
         'text/plain', 
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
       ];
-      
+
       if (!validTypes.includes(file.type)) {
         toast({
           title: "Invalid file type",
@@ -61,7 +61,7 @@ export default function Create() {
         });
         return false;
       }
-      
+
       if (file.size > 10 * 1024 * 1024) {
         toast({
           title: "File too large",
@@ -70,7 +70,7 @@ export default function Create() {
         });
         return false;
       }
-      
+
       return true;
     });
 
@@ -81,13 +81,13 @@ export default function Create() {
         progress: 0,
         status: 'processing'
       };
-      
+
       setUploadedFiles(prev => [...prev, newFile]);
-      
+
       try {
         const fileText = await extractTextFromFile(file);
         setText(prev => prev + (prev ? '\n\n' : '') + `[From ${file.name}]\n${fileText}`);
-        
+
         setUploadedFiles(prev => 
           prev.map(f => 
             f.file === file 
@@ -95,7 +95,7 @@ export default function Create() {
               : f
           )
         );
-        
+
         toast({
           title: "File processed",
           description: `Content from ${file.name} has been added to your text.`
@@ -108,7 +108,7 @@ export default function Create() {
               : f
           )
         );
-        
+
         toast({
           title: "Processing failed",
           description: `Could not extract text from ${file.name}.`,
@@ -121,7 +121,7 @@ export default function Create() {
   const extractTextFromFile = async (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      
+
       reader.onload = (e) => {
         const result = e.target?.result;
         if (typeof result === 'string') {
@@ -135,9 +135,9 @@ export default function Create() {
           reject(new Error('Failed to read file'));
         }
       };
-      
+
       reader.onerror = () => reject(new Error('File reading failed'));
-      
+
       if (file.type === 'text/plain') {
         reader.readAsText(file);
       } else {
@@ -160,7 +160,7 @@ export default function Create() {
 
   // Voice input handling
   const handleVoiceTranscription = (transcription: string) => {
-    setText(prev => prev + (prev ? '\n\n' : '') + `[Voice Input]\n${transcription}`);
+    setText(prev => prev + (prev ? ' ' : '') + transcription);
   };
 
   const handleGenerate = async () => {
@@ -388,6 +388,7 @@ export default function Create() {
                       value={text}
                       onChange={(e) => setText(e.target.value)}
                       className="min-h-[200px] resize-none"
+                      readOnly // Make the voice transcription box read-only
                     />
                   </div>
                 </div>
